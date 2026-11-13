@@ -192,6 +192,7 @@
                 @drop="handleDrop"
               >
                 <textarea
+                  v-autosize-textarea
                   v-model="taskPrompt"
                   class="task-input"
                   :disabled="!isConnectionReady || (isWorkflowRunning && status !== 'Waiting for input...')"
@@ -490,6 +491,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import vAutosizeTextarea from '../utils/autosizeTextarea'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { fetchWorkflowsWithDesc, fetchLogsZip, fetchWorkflowYAML, postFile, getAttachment, fetchVueGraph } from '../utils/apiFunctions.js'
@@ -3036,11 +3038,11 @@ watch(
 .input-area {
   flex: 0 0 auto;
   min-width: 0;
-  min-height: 120px;
+  min-height: 0;
 }
 
 .input-shell {
-  height: 100%;
+  height: auto;
   display: flex;
   flex-direction: row;
   background-color: rgba(255, 255, 255, 0.03);
@@ -3096,6 +3098,10 @@ watch(
 .task-input {
   flex: 1;
   min-width: 0;
+  box-sizing: border-box;
+  min-height: min(180px, 25dvh);
+  max-height: 35dvh;
+  overflow-y: auto;
   padding: 16px;
   border: none;
   font-family: 'Inter', sans-serif;

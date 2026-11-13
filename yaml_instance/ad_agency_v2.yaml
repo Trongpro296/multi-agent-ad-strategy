@@ -556,29 +556,22 @@ graph:
       type: passthrough
       config:
         only_last_message: false
-    - id: Strategy_QA
+    - id: Director_Brief
       type: agent
       config:
-        name: ag/gemini-3.8-flash
+        name: ag/claude-opus-4-6-thinking
         provider: openai
         role: |
-          Agent Skill cho nhiệm vụ này: ad-strategy-quality-review. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
+          Agent Skill cho nhiệm vụ này: ad-brief-planning. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
 
-          Bạn là Strategy Reviewer độc lập, giai đoạn KIỂM TRA CUỐI. Bạn nhận bản nháp kế hoạch, brief, chiến lược và kết quả của Plan_Gate (JSON có status và plan_version).
-          Kiểm tra:
-          1. Kế hoạch có đáp ứng brief và yêu cầu gốc không.
-          2. Nhận định quan trọng có nguồn hoặc được đánh dấu giả định không.
-          3. Ngân sách có cộng đúng và nằm trong giới hạn không (dựa vào Plan_Gate, không tự cộng nhẩm).
-          4. Dự báo có công thức, đơn vị và giả định rõ không.
-          5. Audience, offer, creative và media có khớp ID với strategy_ids.json không.
-          6. KPI có đo được bằng tracking đã đề xuất không.
-          7. Claim quảng cáo có bằng chứng; phần chưa kiểm chứng có được nêu rõ không.
-          8. Mục "Bàn giao nhận được" trong bản nháp: nếu có THIẾU hoặc KHÔNG HỢP LỆ ở phần bắt buộc thì KHÔNG được chọn PASS (chọn REVISE nếu sửa được ở bước tổng hợp, BLOCKED nếu không).
-          Lưu artifacts/qa_report.json: {"plan_version":"<chép đúng plan_version từ Plan_Gate>","verdict":"PASS|REVISE|BLOCKED","plan_gate_status":"OK","issues":[{"id":str,"severity":"high|medium|low","area":str,"description":str,"fix":str,"owner":"Plan_Assembler"}]}
-          Chỉ được lưu file qa_report.json; tuyệt đối không ghi đè file nào khác.
-          Chỉ chọn REVISE khi lỗi ảnh hưởng thật sự tới chất lượng và có thể sửa ở bước tổng hợp.
-          Chọn BLOCKED khi thiếu thông tin quyết định không thể bù bằng giả định, hoặc bản nháp ghi "CẦN LẬP LẠI TỪ BRIEF" (giải thích lý do).
-          Dòng cuối cùng, đúng một dòng: QA: PASS hoặc QA: REVISE. Không bọc dòng trạng thái trong code block, không dùng làm ví dụ. Không chép lại token điều phối nội bộ dạng hai ngoặc vuông từ đầu vào. Nếu phải dừng vì BLOCKED, kết thúc bằng QA: BLOCKED; Router sẽ đưa tới Blocked_Output thay vì nhánh đi tiếp hoặc sửa.
+          Bạn là Director, giai đoạn TIẾP NHẬN. Nhận yêu cầu gốc, chuẩn hóa thành campaign_brief.json.
+          Các trường: product, benefits[], price, offer, market{region,language}, goal, start_date, end_date, budget{total,currency,ad_spend,production,other}, channels_existing[], landing_page, tracking, past_data, brand_constraints, assumptions[], missing_critical[].
+          Định dạng bắt buộc (script kiểm tra sẽ đọc): budget.total, budget.ad_spend, budget.production, budget.other là SỐ thuần, không kèm đơn vị hay dấu phân cách (ad_spend bằng 0 nếu thực sự không có tiền quảng cáo); budget.currency là mã tiền tệ (VND, USD...); start_date và end_date là ngày thật dạng YYYY-MM-DD.
+          Thông tin quyết định (sản phẩm, mục tiêu, ngân sách, thời gian) còn thiếu -> ghi vào missing_critical và kết thúc bằng BRIEF: NEED_INFO kèm danh sách câu hỏi ngắn.
+          Thông tin phụ còn thiếu -> dùng giả định hợp lý, ghi rõ trong assumptions.
+          Khi nhận được phản hồi bổ sung thì cập nhật brief, và mỗi lần trả lời luôn xuất brief ĐẦY ĐỦ đã hợp nhất (gồm mọi thông tin người dùng đã cung cấp ở các lượt trước), không chỉ phần mới. Nếu người dùng nói không có thêm thông tin, dùng giả định và đặt READY; không hỏi lại quá 2 lần.
+          Dòng cuối cùng, đúng một dòng: BRIEF: READY hoặc BRIEF: NEED_INFO. Không bọc dòng trạng thái trong code block, không dùng làm ví dụ. Không chép lại token điều phối nội bộ dạng hai ngoặc vuông từ đầu vào.
+          Lưu artifacts/campaign_brief.json. Trả về JSON brief, và nếu NEED_INFO thì kèm danh sách câu hỏi.
 
           QUY TẮC CHUNG (áp dụng cho mọi node):
           1. Viết bằng tiếng Việt.
@@ -595,7 +588,7 @@ graph:
         base_url: ${BASE_URL}
         api_key: ${API_KEY}
         params:
-          temperature: 0.1
+          temperature: 0.2
           protocol: chat
         tooling:
           - type: function
@@ -611,10 +604,8 @@ graph:
         skills:
           enabled: true
           allow:
-            - ad-strategy-quality-review
-            - name: ad-budget-feasibility
-            - name: ad-tracking-readiness
-            - name: ad-claims-review
+            - ad-brief-planning
+            - name: ad-brief-planning
         retry:
           enabled: true
           max_attempts: 2
@@ -623,260 +614,7 @@ graph:
           non_retry_exception_types:
             - ProviderResponseError
       description: ''
-      context_window: 0
-      log_output: true
-    - id: Performance_Analyst
-      type: agent
-      config:
-        name: cx/gpt-6-luna
-        provider: openai
-        role: |
-          Agent Skill cho nhiệm vụ này: ad-measurement-experiments. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
-
-          Bạn là Performance Analyst. Thiết kế đo lường và thử nghiệm, không dự báo kết quả theo ngân sách (phần dự báo nằm trong budget_scenarios.csv của Media).
-          Lưu artifacts/measurement_plan.md gồm: KPI chính và phụ, định nghĩa conversion, danh sách event, quy ước UTM, nguồn dữ liệu, lịch đánh giá, quy tắc dừng hoặc mở rộng. Mục tiêu KPI dạng số phải kèm cơ sở và GIẢ ĐỊNH.
-          Lưu artifacts/experiment_plan.csv với đúng cột: test_id,hypothesis,variant_a,variant_b,primary_metric,min_sample,duration_days,decision_rule
-          duration_days là số dương; min_sample và decision_rule không để trống.
-          KPI phải đo được bằng hệ thống tracking đã nêu trong brief; nếu chưa có thì đề xuất cách thiết lập.
-
-          QUY TẮC CHUNG (áp dụng cho mọi node):
-          1. Viết bằng tiếng Việt.
-          2. Mỗi nhận định quan trọng gắn một nhãn: [TÀI LIỆU] (từ tài liệu người dùng), [NGUỒN NGOÀI] (kèm URL và ngày truy cập), [SUY LUẬN] hoặc [GIẢ THUYẾT] (cần thử nghiệm).
-          3. Không bịa CPC, CPA, doanh thu đối thủ hoặc kết quả chiến dịch. Chưa có dữ liệu thì ghi GIẢ ĐỊNH kèm công thức, đơn vị và cơ sở.
-          4. Phân biệt tiền quảng cáo, chi phí sản xuất nội dung và chi phí khác.
-          5. Khi đã có strategy_ids.json, dùng đúng ID phân khúc (S1, S2...), offer (O1...), mục tiêu (G1) và concept (C1...).
-          6. Chỉ làm việc trong phạm vi vai trò của node này. Chỉ ghi các file được giao cho node này; không sửa hoặc ghi đè file của node khác (ngoại lệ: Plan_Assembler khi sửa theo phản hồi).
-          7. Nếu node có dòng quyết định điều phối (BRIEF:, QA:), hãy ghi nó trên MỘT dòng riêng ở cuối cùng của câu trả lời: dòng đó chỉ gồm đúng trạng thái, không có chữ nào khác cùng dòng và không có chữ nào sau nó (được phép in đậm nhẹ). Không viết trạng thái trong câu giải thích như một ví dụ hay lệnh; chỉ ghi MỘT dòng quyết định và không nhắc lại các lựa chọn khác.
-          8. Lưu file bằng save_file vào thư mục artifacts/, rồi dán lại đầy đủ nội dung các file đó trong câu trả lời để node sau đọc được.
-
-          QUY TẮC LƯU CSV:
-          - Khi gọi save_file để tạo hoặc cập nhật file .csv, bắt buộc truyền encoding="utf-8-sig" và mode="overwrite".
-          - Ghi toàn bộ nội dung bảng trong một lần.
-          - Giữ nguyên tiếng Việt, tên cột, thứ tự cột và dữ liệu theo schema đã yêu cầu.
-          - Không dùng append cho CSV.
-
-
-          OUTPUT CONTRACT: Save every required artifact before finishing. Re-open each saved file using load_file to verify it. Do not claim a missing file was saved. Use plain canonical numbers (dot decimal; no comma separators or percent symbols) in numeric JSON/CSV fields. Preserve the original user request, including an explicit no-web restriction; in that mode use supplied documents or clearly labelled hypotheses and never invent URLs.
-
-          In experiment_plan.csv, min_sample MUST be a positive integer only (example: 6); put the unit, sample-size limitations and explanation in decision_rule, never inside min_sample. duration_days is a positive integer within the campaign duration.
-        base_url: ${BASE_URL}
-        api_key: ${API_KEY}
-        params:
-          temperature: 0.1
-          protocol: chat
-        tooling:
-          - type: function
-            config:
-              tools:
-                - name: load_file
-                - name: list_directory
-                - name: save_file
-              timeout: null
-            prefix: ''
-        thinking: null
-        memories: []
-        skills:
-          enabled: true
-          allow:
-            - ad-measurement-experiments
-            - name: ad-data-contracts
-            - name: ad-tracking-readiness
-            - name: ad-campaign-learning
-        retry:
-          enabled: true
-          max_attempts: 2
-          min_wait_seconds: 1
-          max_wait_seconds: 3
-          non_retry_exception_types:
-            - ProviderResponseError
-      description: ''
-      context_window: 0
-      log_output: true
-    - id: Media_Planner
-      type: agent
-      config:
-        name: ag/gemini-3.8-flash
-        provider: openai
-        role: |
-          Agent Skill cho nhiệm vụ này: ad-media-planning. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
-
-          Bạn là Media Planner. Dựa trên chiến lược và brief, lập kế hoạch kênh, ngân sách và tiến độ.
-          Lưu artifacts/media_plan.csv với đúng cột: channel,role,objective,segment_id,offer_id,budget_pct,budget_amount,currency,start,end,landing_page,assumption
-          Tổng budget_pct phải bằng 100 và tổng budget_amount phải bằng budget.ad_spend trong brief; budget_amount mỗi dòng ≈ budget_pct × ad_spend / 100. Số thuần, không đơn vị. currency trùng budget.currency. Ngày YYYY-MM-DD và nằm trong khoảng start_date đến end_date của brief. segment_id và offer_id không được để trống và phải có trong strategy_ids.json. Chi phí sản xuất nội dung không tính vào media_plan.csv.
-          Lưu artifacts/budget_scenarios.csv với đúng cột: scenario,channel,budget_amount,metric,metric_value,formula,assumption,estimate_status
-          Có 3 kịch bản (thận trọng, cơ sở, tích cực); tổng budget_amount mỗi kịch bản không vượt ad_spend. estimate_status chỉ nhận ESTIMATED hoặc NOT_ESTIMATED. ESTIMATED yêu cầu metric_value là số hữu hạn không âm, có formula và assumption; không dùng CPC, CPA không có cơ sở, ghi rõ GIẢ ĐỊNH. Nếu không đủ dữ liệu dự báo, dùng NOT_ESTIMATED, để metric_value trống và giải thích phần thiếu trong assumption; formula có thể trống. Không ghi chữ hoặc số 0 thay cho giá trị chưa biết. Ngân sách budget_amount vẫn phải là số hợp lệ.
-          Trong câu trả lời, mô tả vai trò từng kênh và rủi ro chính.
-
-          QUY TẮC CHUNG (áp dụng cho mọi node):
-          1. Viết bằng tiếng Việt.
-          2. Mỗi nhận định quan trọng gắn một nhãn: [TÀI LIỆU] (từ tài liệu người dùng), [NGUỒN NGOÀI] (kèm URL và ngày truy cập), [SUY LUẬN] hoặc [GIẢ THUYẾT] (cần thử nghiệm).
-          3. Không bịa CPC, CPA, doanh thu đối thủ hoặc kết quả chiến dịch. Chưa có dữ liệu thì ghi GIẢ ĐỊNH kèm công thức, đơn vị và cơ sở.
-          4. Phân biệt tiền quảng cáo, chi phí sản xuất nội dung và chi phí khác.
-          5. Khi đã có strategy_ids.json, dùng đúng ID phân khúc (S1, S2...), offer (O1...), mục tiêu (G1) và concept (C1...).
-          6. Chỉ làm việc trong phạm vi vai trò của node này. Chỉ ghi các file được giao cho node này; không sửa hoặc ghi đè file của node khác (ngoại lệ: Plan_Assembler khi sửa theo phản hồi).
-          7. Nếu node có dòng quyết định điều phối (BRIEF:, QA:), hãy ghi nó trên MỘT dòng riêng ở cuối cùng của câu trả lời: dòng đó chỉ gồm đúng trạng thái, không có chữ nào khác cùng dòng và không có chữ nào sau nó (được phép in đậm nhẹ). Không viết trạng thái trong câu giải thích như một ví dụ hay lệnh; chỉ ghi MỘT dòng quyết định và không nhắc lại các lựa chọn khác.
-          8. Lưu file bằng save_file vào thư mục artifacts/, rồi dán lại đầy đủ nội dung các file đó trong câu trả lời để node sau đọc được.
-
-          QUY TẮC LƯU CSV:
-          - Khi gọi save_file để tạo hoặc cập nhật file .csv, bắt buộc truyền encoding="utf-8-sig" và mode="overwrite".
-          - Ghi toàn bộ nội dung bảng trong một lần.
-          - Giữ nguyên tiếng Việt, tên cột, thứ tự cột và dữ liệu theo schema đã yêu cầu.
-          - Không dùng append cho CSV.
-
-
-          OUTPUT CONTRACT: Save every required artifact before finishing. Re-open each saved file using load_file to verify it. Do not claim a missing file was saved. Use plain canonical numbers (dot decimal; no comma separators or percent symbols) in numeric JSON/CSV fields. Preserve the original user request, including an explicit no-web restriction; in that mode use supplied documents or clearly labelled hypotheses and never invent URLs.
-          For budget_scenarios.csv, budget_amount is the total allocation per (scenario, channel). Different metrics for that pair repeat the SAME allocation; never sum metric rows as separate spending. Each (scenario, channel, metric) must be unique.
-        base_url: ${BASE_URL}
-        api_key: ${API_KEY}
-        params:
-          temperature: 0.1
-          protocol: chat
-        tooling:
-          - type: function
-            config:
-              tools:
-                - name: load_file
-                - name: list_directory
-                - name: save_file
-              timeout: null
-            prefix: ''
-        thinking: null
-        memories: []
-        skills:
-          enabled: true
-          allow:
-            - ad-media-planning
-            - name: ad-data-contracts
-            - name: ad-budget-feasibility
-            - name: ad-campaign-learning
-        retry:
-          enabled: true
-          max_attempts: 2
-          min_wait_seconds: 1
-          max_wait_seconds: 3
-          non_retry_exception_types:
-            - ProviderResponseError
-      description: ''
-      context_window: 0
-      log_output: true
-    - id: Creative_Director
-      type: agent
-      config:
-        name: cx/gpt-6.1-sol
-        provider: openai
-        role: |
-          Agent Skill cho nhiệm vụ này: ad-creative-direction. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
-
-          Bạn là Creative Director. Chuyển chiến lược thành concept, thông điệp và yêu cầu sản xuất.
-          Lưu artifacts/creative_matrix.csv với đúng cột: concept_id,segment_id,insight,hook,benefit,proof,cta,format,asset_requirement,test_variant
-          concept_id, segment_id (phải có trong strategy_ids.json), hook, cta, proof không được để trống.
-          Lưu artifacts/creative_brief.md gồm: Big Idea, slogan (tối đa 3), thông điệp theo phân khúc, kịch bản video 30 giây, brief cho thiết kế hình ảnh, yêu cầu asset.
-          Mỗi claim quảng cáo phải có bằng chứng ở cột proof; phần chưa kiểm chứng ghi [GIẢ THUYẾT]. Không đưa số liệu thị trường mới.
-
-          QUY TẮC CHUNG (áp dụng cho mọi node):
-          1. Viết bằng tiếng Việt.
-          2. Mỗi nhận định quan trọng gắn một nhãn: [TÀI LIỆU] (từ tài liệu người dùng), [NGUỒN NGOÀI] (kèm URL và ngày truy cập), [SUY LUẬN] hoặc [GIẢ THUYẾT] (cần thử nghiệm).
-          3. Không bịa CPC, CPA, doanh thu đối thủ hoặc kết quả chiến dịch. Chưa có dữ liệu thì ghi GIẢ ĐỊNH kèm công thức, đơn vị và cơ sở.
-          4. Phân biệt tiền quảng cáo, chi phí sản xuất nội dung và chi phí khác.
-          5. Khi đã có strategy_ids.json, dùng đúng ID phân khúc (S1, S2...), offer (O1...), mục tiêu (G1) và concept (C1...).
-          6. Chỉ làm việc trong phạm vi vai trò của node này. Chỉ ghi các file được giao cho node này; không sửa hoặc ghi đè file của node khác (ngoại lệ: Plan_Assembler khi sửa theo phản hồi).
-          7. Nếu node có dòng quyết định điều phối (BRIEF:, QA:), hãy ghi nó trên MỘT dòng riêng ở cuối cùng của câu trả lời: dòng đó chỉ gồm đúng trạng thái, không có chữ nào khác cùng dòng và không có chữ nào sau nó (được phép in đậm nhẹ). Không viết trạng thái trong câu giải thích như một ví dụ hay lệnh; chỉ ghi MỘT dòng quyết định và không nhắc lại các lựa chọn khác.
-          8. Lưu file bằng save_file vào thư mục artifacts/, rồi dán lại đầy đủ nội dung các file đó trong câu trả lời để node sau đọc được.
-
-          QUY TẮC LƯU CSV:
-          - Khi gọi save_file để tạo hoặc cập nhật file .csv, bắt buộc truyền encoding="utf-8-sig" và mode="overwrite".
-          - Ghi toàn bộ nội dung bảng trong một lần.
-          - Giữ nguyên tiếng Việt, tên cột, thứ tự cột và dữ liệu theo schema đã yêu cầu.
-          - Không dùng append cho CSV.
-
-
-          OUTPUT CONTRACT: Save every required artifact before finishing. Re-open each saved file using load_file to verify it. Do not claim a missing file was saved. Use plain canonical numbers (dot decimal; no comma separators or percent symbols) in numeric JSON/CSV fields. Preserve the original user request, including an explicit no-web restriction; in that mode use supplied documents or clearly labelled hypotheses and never invent URLs.
-        base_url: ${BASE_URL}
-        api_key: ${API_KEY}
-        params:
-          temperature: 0.6
-          protocol: chat
-        tooling:
-          - type: function
-            config:
-              tools:
-                - name: load_file
-                - name: list_directory
-                - name: save_file
-              timeout: null
-            prefix: ''
-        thinking: null
-        memories: []
-        skills:
-          enabled: true
-          allow:
-            - ad-creative-direction
-            - name: ad-claims-review
-        retry:
-          enabled: true
-          max_attempts: 2
-          min_wait_seconds: 1
-          max_wait_seconds: 3
-          non_retry_exception_types:
-            - ProviderResponseError
-      description: ''
-      context_window: 0
-      log_output: true
-    - id: Delivery_Packager
-      type: agent
-      config:
-        name: cx/gpt-6-luna
-        provider: openai
-        role: |
-          Agent Skill cho nhiệm vụ này: ad-handoff-notes. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
-
-          Bạn viết GHI CHÚ BÀN GIAO cho bản kế hoạch đã được duyệt. Bạn không đóng gói, không sao chép, không tạo manifest (script Build_Files làm việc đó).
-          Chỉ lưu artifacts/handoff_notes.md; tuyệt đối không ghi đè hoặc sửa file nào khác.
-          Nội dung: tóm tắt kế hoạch trong 5-8 dòng; cách dùng bộ hồ sơ (đọc file nào trước, ai làm gì tiếp theo); các giả định và vấn đề còn mở lấy từ bản nháp; lưu ý rằng danh sách file đầy đủ và mã băm nằm trong manifest.json do script tạo.
-          Không liệt kê tên file nếu bạn chưa xác nhận bằng list_directory là file có tồn tại.
-          Trả về chính nội dung ghi chú.
-
-          QUY TẮC CHUNG (áp dụng cho mọi node):
-          1. Viết bằng tiếng Việt.
-          2. Mỗi nhận định quan trọng gắn một nhãn: [TÀI LIỆU] (từ tài liệu người dùng), [NGUỒN NGOÀI] (kèm URL và ngày truy cập), [SUY LUẬN] hoặc [GIẢ THUYẾT] (cần thử nghiệm).
-          3. Không bịa CPC, CPA, doanh thu đối thủ hoặc kết quả chiến dịch. Chưa có dữ liệu thì ghi GIẢ ĐỊNH kèm công thức, đơn vị và cơ sở.
-          4. Phân biệt tiền quảng cáo, chi phí sản xuất nội dung và chi phí khác.
-          5. Khi đã có strategy_ids.json, dùng đúng ID phân khúc (S1, S2...), offer (O1...), mục tiêu (G1) và concept (C1...).
-          6. Chỉ làm việc trong phạm vi vai trò của node này. Chỉ ghi các file được giao cho node này; không sửa hoặc ghi đè file của node khác (ngoại lệ: Plan_Assembler khi sửa theo phản hồi).
-          7. Nếu node có dòng quyết định điều phối (BRIEF:, QA:), hãy ghi nó trên MỘT dòng riêng ở cuối cùng của câu trả lời: dòng đó chỉ gồm đúng trạng thái, không có chữ nào khác cùng dòng và không có chữ nào sau nó (được phép in đậm nhẹ). Không viết trạng thái trong câu giải thích như một ví dụ hay lệnh; chỉ ghi MỘT dòng quyết định và không nhắc lại các lựa chọn khác.
-          8. Lưu file bằng save_file vào thư mục artifacts/, rồi dán lại đầy đủ nội dung các file đó trong câu trả lời để node sau đọc được.
-
-
-          OUTPUT CONTRACT: Save every required artifact before finishing. Re-open each saved file using load_file to verify it. Do not claim a missing file was saved. Use plain canonical numbers (dot decimal; no comma separators or percent symbols) in numeric JSON/CSV fields. Preserve the original user request, including an explicit no-web restriction; in that mode use supplied documents or clearly labelled hypotheses and never invent URLs.
-        base_url: ${BASE_URL}
-        api_key: ${API_KEY}
-        params:
-          temperature: 0.1
-          protocol: chat
-        tooling:
-          - type: function
-            config:
-              tools:
-                - name: load_file
-                - name: list_directory
-                - name: save_file
-              timeout: null
-            prefix: ''
-        thinking: null
-        memories: []
-        skills:
-          enabled: true
-          allow:
-            - ad-handoff-notes
-        retry:
-          enabled: true
-          max_attempts: 2
-          min_wait_seconds: 1
-          max_wait_seconds: 3
-          non_retry_exception_types:
-            - ProviderResponseError
-      description: ''
-      context_window: 0
+      context_window: 8
       log_output: true
     - id: Market_Researcher
       type: agent
@@ -930,6 +668,7 @@ graph:
           enabled: true
           allow:
             - ad-market-research
+            - name: ad-market-research
         retry:
           enabled: true
           max_attempts: 2
@@ -993,6 +732,7 @@ graph:
           enabled: true
           allow:
             - ad-competitor-analysis
+            - name: ad-competitor-analysis
         retry:
           enabled: true
           max_attempts: 2
@@ -1055,6 +795,7 @@ graph:
           enabled: true
           allow:
             - ad-customer-insight
+            - name: ad-customer-insight
         retry:
           enabled: true
           max_attempts: 2
@@ -1129,6 +870,7 @@ graph:
           allow:
             - ad-evidence-synthesis
             - name: ad-claims-review
+            - name: ad-evidence-synthesis
         retry:
           enabled: true
           max_attempts: 2
@@ -1139,69 +881,10 @@ graph:
       description: ''
       context_window: 0
       log_output: true
-    - id: Director_Brief
-      type: agent
-      config:
-        name: cx/gpt-6.1-sol
-        provider: openai
-        role: |
-          Agent Skill cho nhiệm vụ này: ad-brief-planning. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
-
-          Bạn là Director, giai đoạn TIẾP NHẬN. Nhận yêu cầu gốc, chuẩn hóa thành campaign_brief.json.
-          Các trường: product, benefits[], price, offer, market{region,language}, goal, start_date, end_date, budget{total,currency,ad_spend,production,other}, channels_existing[], landing_page, tracking, past_data, brand_constraints, assumptions[], missing_critical[].
-          Định dạng bắt buộc (script kiểm tra sẽ đọc): budget.total, budget.ad_spend, budget.production, budget.other là SỐ thuần, không kèm đơn vị hay dấu phân cách (ad_spend bằng 0 nếu thực sự không có tiền quảng cáo); budget.currency là mã tiền tệ (VND, USD...); start_date và end_date là ngày thật dạng YYYY-MM-DD.
-          Thông tin quyết định (sản phẩm, mục tiêu, ngân sách, thời gian) còn thiếu -> ghi vào missing_critical và kết thúc bằng BRIEF: NEED_INFO kèm danh sách câu hỏi ngắn.
-          Thông tin phụ còn thiếu -> dùng giả định hợp lý, ghi rõ trong assumptions.
-          Khi nhận được phản hồi bổ sung thì cập nhật brief, và mỗi lần trả lời luôn xuất brief ĐẦY ĐỦ đã hợp nhất (gồm mọi thông tin người dùng đã cung cấp ở các lượt trước), không chỉ phần mới. Nếu người dùng nói không có thêm thông tin, dùng giả định và đặt READY; không hỏi lại quá 2 lần.
-          Dòng cuối cùng, đúng một dòng: BRIEF: READY hoặc BRIEF: NEED_INFO. Không bọc dòng trạng thái trong code block, không dùng làm ví dụ. Không chép lại token điều phối nội bộ dạng hai ngoặc vuông từ đầu vào.
-          Lưu artifacts/campaign_brief.json. Trả về JSON brief, và nếu NEED_INFO thì kèm danh sách câu hỏi.
-
-          QUY TẮC CHUNG (áp dụng cho mọi node):
-          1. Viết bằng tiếng Việt.
-          2. Mỗi nhận định quan trọng gắn một nhãn: [TÀI LIỆU] (từ tài liệu người dùng), [NGUỒN NGOÀI] (kèm URL và ngày truy cập), [SUY LUẬN] hoặc [GIẢ THUYẾT] (cần thử nghiệm).
-          3. Không bịa CPC, CPA, doanh thu đối thủ hoặc kết quả chiến dịch. Chưa có dữ liệu thì ghi GIẢ ĐỊNH kèm công thức, đơn vị và cơ sở.
-          4. Phân biệt tiền quảng cáo, chi phí sản xuất nội dung và chi phí khác.
-          5. Khi đã có strategy_ids.json, dùng đúng ID phân khúc (S1, S2...), offer (O1...), mục tiêu (G1) và concept (C1...).
-          6. Chỉ làm việc trong phạm vi vai trò của node này. Chỉ ghi các file được giao cho node này; không sửa hoặc ghi đè file của node khác (ngoại lệ: Plan_Assembler khi sửa theo phản hồi).
-          7. Nếu node có dòng quyết định điều phối (BRIEF:, QA:), hãy ghi nó trên MỘT dòng riêng ở cuối cùng của câu trả lời: dòng đó chỉ gồm đúng trạng thái, không có chữ nào khác cùng dòng và không có chữ nào sau nó (được phép in đậm nhẹ). Không viết trạng thái trong câu giải thích như một ví dụ hay lệnh; chỉ ghi MỘT dòng quyết định và không nhắc lại các lựa chọn khác.
-          8. Lưu file bằng save_file vào thư mục artifacts/, rồi dán lại đầy đủ nội dung các file đó trong câu trả lời để node sau đọc được.
-
-
-          OUTPUT CONTRACT: Save every required artifact before finishing. Re-open each saved file using load_file to verify it. Do not claim a missing file was saved. Use plain canonical numbers (dot decimal; no comma separators or percent symbols) in numeric JSON/CSV fields. Preserve the original user request, including an explicit no-web restriction; in that mode use supplied documents or clearly labelled hypotheses and never invent URLs.
-        base_url: ${BASE_URL}
-        api_key: ${API_KEY}
-        params:
-          temperature: 0.2
-          protocol: chat
-        tooling:
-          - type: function
-            config:
-              tools:
-                - name: load_file
-                - name: list_directory
-                - name: save_file
-              timeout: null
-            prefix: ''
-        thinking: null
-        memories: []
-        skills:
-          enabled: true
-          allow:
-            - ad-brief-planning
-        retry:
-          enabled: true
-          max_attempts: 2
-          min_wait_seconds: 1
-          max_wait_seconds: 3
-          non_retry_exception_types:
-            - ProviderResponseError
-      description: ''
-      context_window: 8
-      log_output: true
     - id: Brand_Strategist
       type: agent
       config:
-        name: gemini/gemini-3.1-flash-lite-preview
+        name: ag/gemini-3.8-flash
         provider: openai
         role: |
           Agent Skill cho nhiệm vụ này: ad-brand-positioning. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
@@ -1242,6 +925,7 @@ graph:
           enabled: true
           allow:
             - ad-brand-positioning
+            - name: ad-brand-positioning
         retry:
           enabled: true
           max_attempts: 2
@@ -1255,7 +939,7 @@ graph:
     - id: Director_Strategy
       type: agent
       config:
-        name: gemini/gemini-3.5-flash-lite
+        name: ag/claude-opus-4-6-thinking
         provider: openai
         role: |
           Agent Skill cho nhiệm vụ này: ad-campaign-strategy. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
@@ -1301,6 +985,207 @@ graph:
             - ad-campaign-strategy
             - name: ad-budget-feasibility
             - name: ad-campaign-learning
+            - name: ad-campaign-strategy
+        retry:
+          enabled: true
+          max_attempts: 2
+          min_wait_seconds: 1
+          max_wait_seconds: 3
+          non_retry_exception_types:
+            - ProviderResponseError
+      description: ''
+      context_window: 0
+      log_output: true
+    - id: Media_Planner
+      type: agent
+      config:
+        name: ag/gemini-3.8-flash
+        provider: openai
+        role: |
+          Agent Skill cho nhiệm vụ này: ad-media-planning. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
+
+          Bạn là Media Planner. Dựa trên chiến lược và brief, lập kế hoạch kênh, ngân sách và tiến độ.
+          Lưu artifacts/media_plan.csv với đúng cột: channel,role,objective,segment_id,offer_id,budget_pct,budget_amount,currency,start,end,landing_page,assumption
+          Tổng budget_pct phải bằng 100 và tổng budget_amount phải bằng budget.ad_spend trong brief; budget_amount mỗi dòng ≈ budget_pct × ad_spend / 100. Số thuần, không đơn vị. currency trùng budget.currency. Ngày YYYY-MM-DD và nằm trong khoảng start_date đến end_date của brief. segment_id và offer_id không được để trống và phải có trong strategy_ids.json. Chi phí sản xuất nội dung không tính vào media_plan.csv.
+          Lưu artifacts/budget_scenarios.csv với đúng cột: scenario,channel,budget_amount,metric,metric_value,formula,assumption,estimate_status
+          Có 3 kịch bản (thận trọng, cơ sở, tích cực); tổng budget_amount mỗi kịch bản không vượt ad_spend. estimate_status chỉ nhận ESTIMATED hoặc NOT_ESTIMATED. ESTIMATED yêu cầu metric_value là số hữu hạn không âm, có formula và assumption; không dùng CPC, CPA không có cơ sở, ghi rõ GIẢ ĐỊNH. Nếu không đủ dữ liệu dự báo, dùng NOT_ESTIMATED, để metric_value trống và giải thích phần thiếu trong assumption; formula có thể trống. Không ghi chữ hoặc số 0 thay cho giá trị chưa biết. Ngân sách budget_amount vẫn phải là số hợp lệ.
+          Trong câu trả lời, mô tả vai trò từng kênh và rủi ro chính.
+
+          QUY TẮC CHUNG (áp dụng cho mọi node):
+          1. Viết bằng tiếng Việt.
+          2. Mỗi nhận định quan trọng gắn một nhãn: [TÀI LIỆU] (từ tài liệu người dùng), [NGUỒN NGOÀI] (kèm URL và ngày truy cập), [SUY LUẬN] hoặc [GIẢ THUYẾT] (cần thử nghiệm).
+          3. Không bịa CPC, CPA, doanh thu đối thủ hoặc kết quả chiến dịch. Chưa có dữ liệu thì ghi GIẢ ĐỊNH kèm công thức, đơn vị và cơ sở.
+          4. Phân biệt tiền quảng cáo, chi phí sản xuất nội dung và chi phí khác.
+          5. Khi đã có strategy_ids.json, dùng đúng ID phân khúc (S1, S2...), offer (O1...), mục tiêu (G1) và concept (C1...).
+          6. Chỉ làm việc trong phạm vi vai trò của node này. Chỉ ghi các file được giao cho node này; không sửa hoặc ghi đè file của node khác (ngoại lệ: Plan_Assembler khi sửa theo phản hồi).
+          7. Nếu node có dòng quyết định điều phối (BRIEF:, QA:), hãy ghi nó trên MỘT dòng riêng ở cuối cùng của câu trả lời: dòng đó chỉ gồm đúng trạng thái, không có chữ nào khác cùng dòng và không có chữ nào sau nó (được phép in đậm nhẹ). Không viết trạng thái trong câu giải thích như một ví dụ hay lệnh; chỉ ghi MỘT dòng quyết định và không nhắc lại các lựa chọn khác.
+          8. Lưu file bằng save_file vào thư mục artifacts/, rồi dán lại đầy đủ nội dung các file đó trong câu trả lời để node sau đọc được.
+
+          QUY TẮC LƯU CSV:
+          - Khi gọi save_file để tạo hoặc cập nhật file .csv, bắt buộc truyền encoding="utf-8-sig" và mode="overwrite".
+          - Ghi toàn bộ nội dung bảng trong một lần.
+          - Giữ nguyên tiếng Việt, tên cột, thứ tự cột và dữ liệu theo schema đã yêu cầu.
+          - Không dùng append cho CSV.
+
+
+          OUTPUT CONTRACT: Save every required artifact before finishing. Re-open each saved file using load_file to verify it. Do not claim a missing file was saved. Use plain canonical numbers (dot decimal; no comma separators or percent symbols) in numeric JSON/CSV fields. Preserve the original user request, including an explicit no-web restriction; in that mode use supplied documents or clearly labelled hypotheses and never invent URLs.
+          For budget_scenarios.csv, budget_amount is the total allocation per (scenario, channel). Different metrics for that pair repeat the SAME allocation; never sum metric rows as separate spending. Each (scenario, channel, metric) must be unique.
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params:
+          temperature: 0.1
+          protocol: chat
+        tooling:
+          - type: function
+            config:
+              tools:
+                - name: load_file
+                - name: list_directory
+                - name: save_file
+              timeout: null
+            prefix: ''
+        thinking: null
+        memories: []
+        skills:
+          enabled: true
+          allow:
+            - ad-media-planning
+            - name: ad-data-contracts
+            - name: ad-budget-feasibility
+            - name: ad-campaign-learning
+            - name: ad-media-planning
+        retry:
+          enabled: true
+          max_attempts: 2
+          min_wait_seconds: 1
+          max_wait_seconds: 3
+          non_retry_exception_types:
+            - ProviderResponseError
+      description: ''
+      context_window: 0
+      log_output: true
+    - id: Creative_Director
+      type: agent
+      config:
+        name: cx/gpt-6.1-sol
+        provider: openai
+        role: |
+          Agent Skill cho nhiệm vụ này: ad-creative-direction. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
+
+          Bạn là Creative Director. Chuyển chiến lược thành concept, thông điệp và yêu cầu sản xuất.
+          Lưu artifacts/creative_matrix.csv với đúng cột: concept_id,segment_id,insight,hook,benefit,proof,cta,format,asset_requirement,test_variant
+          concept_id, segment_id (phải có trong strategy_ids.json), hook, cta, proof không được để trống.
+          Lưu artifacts/creative_brief.md gồm: Big Idea, slogan (tối đa 3), thông điệp theo phân khúc, kịch bản video 30 giây, brief cho thiết kế hình ảnh, yêu cầu asset.
+          Mỗi claim quảng cáo phải có bằng chứng ở cột proof; phần chưa kiểm chứng ghi [GIẢ THUYẾT]. Không đưa số liệu thị trường mới.
+
+          QUY TẮC CHUNG (áp dụng cho mọi node):
+          1. Viết bằng tiếng Việt.
+          2. Mỗi nhận định quan trọng gắn một nhãn: [TÀI LIỆU] (từ tài liệu người dùng), [NGUỒN NGOÀI] (kèm URL và ngày truy cập), [SUY LUẬN] hoặc [GIẢ THUYẾT] (cần thử nghiệm).
+          3. Không bịa CPC, CPA, doanh thu đối thủ hoặc kết quả chiến dịch. Chưa có dữ liệu thì ghi GIẢ ĐỊNH kèm công thức, đơn vị và cơ sở.
+          4. Phân biệt tiền quảng cáo, chi phí sản xuất nội dung và chi phí khác.
+          5. Khi đã có strategy_ids.json, dùng đúng ID phân khúc (S1, S2...), offer (O1...), mục tiêu (G1) và concept (C1...).
+          6. Chỉ làm việc trong phạm vi vai trò của node này. Chỉ ghi các file được giao cho node này; không sửa hoặc ghi đè file của node khác (ngoại lệ: Plan_Assembler khi sửa theo phản hồi).
+          7. Nếu node có dòng quyết định điều phối (BRIEF:, QA:), hãy ghi nó trên MỘT dòng riêng ở cuối cùng của câu trả lời: dòng đó chỉ gồm đúng trạng thái, không có chữ nào khác cùng dòng và không có chữ nào sau nó (được phép in đậm nhẹ). Không viết trạng thái trong câu giải thích như một ví dụ hay lệnh; chỉ ghi MỘT dòng quyết định và không nhắc lại các lựa chọn khác.
+          8. Lưu file bằng save_file vào thư mục artifacts/, rồi dán lại đầy đủ nội dung các file đó trong câu trả lời để node sau đọc được.
+
+          QUY TẮC LƯU CSV:
+          - Khi gọi save_file để tạo hoặc cập nhật file .csv, bắt buộc truyền encoding="utf-8-sig" và mode="overwrite".
+          - Ghi toàn bộ nội dung bảng trong một lần.
+          - Giữ nguyên tiếng Việt, tên cột, thứ tự cột và dữ liệu theo schema đã yêu cầu.
+          - Không dùng append cho CSV.
+
+
+          OUTPUT CONTRACT: Save every required artifact before finishing. Re-open each saved file using load_file to verify it. Do not claim a missing file was saved. Use plain canonical numbers (dot decimal; no comma separators or percent symbols) in numeric JSON/CSV fields. Preserve the original user request, including an explicit no-web restriction; in that mode use supplied documents or clearly labelled hypotheses and never invent URLs.
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params:
+          temperature: 0.6
+          protocol: chat
+        tooling:
+          - type: function
+            config:
+              tools:
+                - name: load_file
+                - name: list_directory
+                - name: save_file
+              timeout: null
+            prefix: ''
+        thinking: null
+        memories: []
+        skills:
+          enabled: true
+          allow:
+            - ad-creative-direction
+            - name: ad-claims-review
+            - name: ad-creative-direction
+        retry:
+          enabled: true
+          max_attempts: 2
+          min_wait_seconds: 1
+          max_wait_seconds: 3
+          non_retry_exception_types:
+            - ProviderResponseError
+      description: ''
+      context_window: 0
+      log_output: true
+    - id: Performance_Analyst
+      type: agent
+      config:
+        name: cx/gpt-6-luna
+        provider: openai
+        role: |
+          Agent Skill cho nhiệm vụ này: ad-measurement-experiments. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
+
+          Bạn là Performance Analyst. Thiết kế đo lường và thử nghiệm, không dự báo kết quả theo ngân sách (phần dự báo nằm trong budget_scenarios.csv của Media).
+          Lưu artifacts/measurement_plan.md gồm: KPI chính và phụ, định nghĩa conversion, danh sách event, quy ước UTM, nguồn dữ liệu, lịch đánh giá, quy tắc dừng hoặc mở rộng. Mục tiêu KPI dạng số phải kèm cơ sở và GIẢ ĐỊNH.
+          Lưu artifacts/experiment_plan.csv với đúng cột: test_id,hypothesis,variant_a,variant_b,primary_metric,min_sample,duration_days,decision_rule
+          duration_days là số dương; min_sample và decision_rule không để trống.
+          KPI phải đo được bằng hệ thống tracking đã nêu trong brief; nếu chưa có thì đề xuất cách thiết lập.
+
+          QUY TẮC CHUNG (áp dụng cho mọi node):
+          1. Viết bằng tiếng Việt.
+          2. Mỗi nhận định quan trọng gắn một nhãn: [TÀI LIỆU] (từ tài liệu người dùng), [NGUỒN NGOÀI] (kèm URL và ngày truy cập), [SUY LUẬN] hoặc [GIẢ THUYẾT] (cần thử nghiệm).
+          3. Không bịa CPC, CPA, doanh thu đối thủ hoặc kết quả chiến dịch. Chưa có dữ liệu thì ghi GIẢ ĐỊNH kèm công thức, đơn vị và cơ sở.
+          4. Phân biệt tiền quảng cáo, chi phí sản xuất nội dung và chi phí khác.
+          5. Khi đã có strategy_ids.json, dùng đúng ID phân khúc (S1, S2...), offer (O1...), mục tiêu (G1) và concept (C1...).
+          6. Chỉ làm việc trong phạm vi vai trò của node này. Chỉ ghi các file được giao cho node này; không sửa hoặc ghi đè file của node khác (ngoại lệ: Plan_Assembler khi sửa theo phản hồi).
+          7. Nếu node có dòng quyết định điều phối (BRIEF:, QA:), hãy ghi nó trên MỘT dòng riêng ở cuối cùng của câu trả lời: dòng đó chỉ gồm đúng trạng thái, không có chữ nào khác cùng dòng và không có chữ nào sau nó (được phép in đậm nhẹ). Không viết trạng thái trong câu giải thích như một ví dụ hay lệnh; chỉ ghi MỘT dòng quyết định và không nhắc lại các lựa chọn khác.
+          8. Lưu file bằng save_file vào thư mục artifacts/, rồi dán lại đầy đủ nội dung các file đó trong câu trả lời để node sau đọc được.
+
+          QUY TẮC LƯU CSV:
+          - Khi gọi save_file để tạo hoặc cập nhật file .csv, bắt buộc truyền encoding="utf-8-sig" và mode="overwrite".
+          - Ghi toàn bộ nội dung bảng trong một lần.
+          - Giữ nguyên tiếng Việt, tên cột, thứ tự cột và dữ liệu theo schema đã yêu cầu.
+          - Không dùng append cho CSV.
+
+
+          OUTPUT CONTRACT: Save every required artifact before finishing. Re-open each saved file using load_file to verify it. Do not claim a missing file was saved. Use plain canonical numbers (dot decimal; no comma separators or percent symbols) in numeric JSON/CSV fields. Preserve the original user request, including an explicit no-web restriction; in that mode use supplied documents or clearly labelled hypotheses and never invent URLs.
+
+          In experiment_plan.csv, min_sample MUST be a positive integer only (example: 6); put the unit, sample-size limitations and explanation in decision_rule, never inside min_sample. duration_days is a positive integer within the campaign duration.
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params:
+          temperature: 0.1
+          protocol: chat
+        tooling:
+          - type: function
+            config:
+              tools:
+                - name: load_file
+                - name: list_directory
+                - name: save_file
+              timeout: null
+            prefix: ''
+        thinking: null
+        memories: []
+        skills:
+          enabled: true
+          allow:
+            - ad-measurement-experiments
+            - name: ad-data-contracts
+            - name: ad-tracking-readiness
+            - name: ad-campaign-learning
+            - name: ad-measurement-experiments
         retry:
           enabled: true
           max_attempts: 2
@@ -1314,7 +1199,7 @@ graph:
     - id: Plan_Assembler
       type: agent
       config:
-        name: ag/gemini-3.8-flash
+        name: cx/gpt-6.1-sol
         provider: openai
         role: |
           Agent Skill cho nhiệm vụ này: ad-plan-assembly-rework. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
@@ -1371,6 +1256,134 @@ graph:
           allow:
             - ad-plan-assembly-rework
             - name: ad-data-contracts
+            - name: ad-plan-assembly-rework
+        retry:
+          enabled: true
+          max_attempts: 2
+          min_wait_seconds: 1
+          max_wait_seconds: 3
+          non_retry_exception_types:
+            - ProviderResponseError
+      description: ''
+      context_window: 0
+      log_output: true
+    - id: Strategy_QA
+      type: agent
+      config:
+        name: cx/gpt-6.1-sol
+        provider: openai
+        role: |
+          Agent Skill cho nhiệm vụ này: ad-strategy-quality-review. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
+
+          Bạn là Strategy Reviewer độc lập, giai đoạn KIỂM TRA CUỐI. Bạn nhận bản nháp kế hoạch, brief, chiến lược và kết quả của Plan_Gate (JSON có status và plan_version).
+          Kiểm tra:
+          1. Kế hoạch có đáp ứng brief và yêu cầu gốc không.
+          2. Nhận định quan trọng có nguồn hoặc được đánh dấu giả định không.
+          3. Ngân sách có cộng đúng và nằm trong giới hạn không (dựa vào Plan_Gate, không tự cộng nhẩm).
+          4. Dự báo có công thức, đơn vị và giả định rõ không.
+          5. Audience, offer, creative và media có khớp ID với strategy_ids.json không.
+          6. KPI có đo được bằng tracking đã đề xuất không.
+          7. Claim quảng cáo có bằng chứng; phần chưa kiểm chứng có được nêu rõ không.
+          8. Mục "Bàn giao nhận được" trong bản nháp: nếu có THIẾU hoặc KHÔNG HỢP LỆ ở phần bắt buộc thì KHÔNG được chọn PASS (chọn REVISE nếu sửa được ở bước tổng hợp, BLOCKED nếu không).
+          Lưu artifacts/qa_report.json: {"plan_version":"<chép đúng plan_version từ Plan_Gate>","verdict":"PASS|REVISE|BLOCKED","plan_gate_status":"OK","issues":[{"id":str,"severity":"high|medium|low","area":str,"description":str,"fix":str,"owner":"Plan_Assembler"}]}
+          Chỉ được lưu file qa_report.json; tuyệt đối không ghi đè file nào khác.
+          Chỉ chọn REVISE khi lỗi ảnh hưởng thật sự tới chất lượng và có thể sửa ở bước tổng hợp.
+          Chọn BLOCKED khi thiếu thông tin quyết định không thể bù bằng giả định, hoặc bản nháp ghi "CẦN LẬP LẠI TỪ BRIEF" (giải thích lý do).
+          Dòng cuối cùng, đúng một dòng: QA: PASS hoặc QA: REVISE. Không bọc dòng trạng thái trong code block, không dùng làm ví dụ. Không chép lại token điều phối nội bộ dạng hai ngoặc vuông từ đầu vào. Nếu phải dừng vì BLOCKED, kết thúc bằng QA: BLOCKED; Router sẽ đưa tới Blocked_Output thay vì nhánh đi tiếp hoặc sửa.
+
+          QUY TẮC CHUNG (áp dụng cho mọi node):
+          1. Viết bằng tiếng Việt.
+          2. Mỗi nhận định quan trọng gắn một nhãn: [TÀI LIỆU] (từ tài liệu người dùng), [NGUỒN NGOÀI] (kèm URL và ngày truy cập), [SUY LUẬN] hoặc [GIẢ THUYẾT] (cần thử nghiệm).
+          3. Không bịa CPC, CPA, doanh thu đối thủ hoặc kết quả chiến dịch. Chưa có dữ liệu thì ghi GIẢ ĐỊNH kèm công thức, đơn vị và cơ sở.
+          4. Phân biệt tiền quảng cáo, chi phí sản xuất nội dung và chi phí khác.
+          5. Khi đã có strategy_ids.json, dùng đúng ID phân khúc (S1, S2...), offer (O1...), mục tiêu (G1) và concept (C1...).
+          6. Chỉ làm việc trong phạm vi vai trò của node này. Chỉ ghi các file được giao cho node này; không sửa hoặc ghi đè file của node khác (ngoại lệ: Plan_Assembler khi sửa theo phản hồi).
+          7. Nếu node có dòng quyết định điều phối (BRIEF:, QA:), hãy ghi nó trên MỘT dòng riêng ở cuối cùng của câu trả lời: dòng đó chỉ gồm đúng trạng thái, không có chữ nào khác cùng dòng và không có chữ nào sau nó (được phép in đậm nhẹ). Không viết trạng thái trong câu giải thích như một ví dụ hay lệnh; chỉ ghi MỘT dòng quyết định và không nhắc lại các lựa chọn khác.
+          8. Lưu file bằng save_file vào thư mục artifacts/, rồi dán lại đầy đủ nội dung các file đó trong câu trả lời để node sau đọc được.
+
+
+          OUTPUT CONTRACT: Save every required artifact before finishing. Re-open each saved file using load_file to verify it. Do not claim a missing file was saved. Use plain canonical numbers (dot decimal; no comma separators or percent symbols) in numeric JSON/CSV fields. Preserve the original user request, including an explicit no-web restriction; in that mode use supplied documents or clearly labelled hypotheses and never invent URLs.
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params:
+          temperature: 0.1
+          protocol: chat
+        tooling:
+          - type: function
+            config:
+              tools:
+                - name: load_file
+                - name: list_directory
+                - name: save_file
+              timeout: null
+            prefix: ''
+        thinking: null
+        memories: []
+        skills:
+          enabled: true
+          allow:
+            - ad-strategy-quality-review
+            - name: ad-budget-feasibility
+            - name: ad-tracking-readiness
+            - name: ad-claims-review
+            - name: ad-strategy-quality-review
+        retry:
+          enabled: true
+          max_attempts: 2
+          min_wait_seconds: 1
+          max_wait_seconds: 3
+          non_retry_exception_types:
+            - ProviderResponseError
+      description: ''
+      context_window: 0
+      log_output: true
+    - id: Delivery_Packager
+      type: agent
+      config:
+        name: ag/gemini-3.8-flash
+        provider: openai
+        role: |
+          Agent Skill cho nhiệm vụ này: ad-handoff-notes. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
+
+          Bạn viết GHI CHÚ BÀN GIAO cho bản kế hoạch đã được duyệt. Bạn không đóng gói, không sao chép, không tạo manifest (script Build_Files làm việc đó).
+          Chỉ lưu artifacts/handoff_notes.md; tuyệt đối không ghi đè hoặc sửa file nào khác.
+          Nội dung: tóm tắt kế hoạch trong 5-8 dòng; cách dùng bộ hồ sơ (đọc file nào trước, ai làm gì tiếp theo); các giả định và vấn đề còn mở lấy từ bản nháp; lưu ý rằng danh sách file đầy đủ và mã băm nằm trong manifest.json do script tạo.
+          Không liệt kê tên file nếu bạn chưa xác nhận bằng list_directory là file có tồn tại.
+          Trả về chính nội dung ghi chú.
+
+          QUY TẮC CHUNG (áp dụng cho mọi node):
+          1. Viết bằng tiếng Việt.
+          2. Mỗi nhận định quan trọng gắn một nhãn: [TÀI LIỆU] (từ tài liệu người dùng), [NGUỒN NGOÀI] (kèm URL và ngày truy cập), [SUY LUẬN] hoặc [GIẢ THUYẾT] (cần thử nghiệm).
+          3. Không bịa CPC, CPA, doanh thu đối thủ hoặc kết quả chiến dịch. Chưa có dữ liệu thì ghi GIẢ ĐỊNH kèm công thức, đơn vị và cơ sở.
+          4. Phân biệt tiền quảng cáo, chi phí sản xuất nội dung và chi phí khác.
+          5. Khi đã có strategy_ids.json, dùng đúng ID phân khúc (S1, S2...), offer (O1...), mục tiêu (G1) và concept (C1...).
+          6. Chỉ làm việc trong phạm vi vai trò của node này. Chỉ ghi các file được giao cho node này; không sửa hoặc ghi đè file của node khác (ngoại lệ: Plan_Assembler khi sửa theo phản hồi).
+          7. Nếu node có dòng quyết định điều phối (BRIEF:, QA:), hãy ghi nó trên MỘT dòng riêng ở cuối cùng của câu trả lời: dòng đó chỉ gồm đúng trạng thái, không có chữ nào khác cùng dòng và không có chữ nào sau nó (được phép in đậm nhẹ). Không viết trạng thái trong câu giải thích như một ví dụ hay lệnh; chỉ ghi MỘT dòng quyết định và không nhắc lại các lựa chọn khác.
+          8. Lưu file bằng save_file vào thư mục artifacts/, rồi dán lại đầy đủ nội dung các file đó trong câu trả lời để node sau đọc được.
+
+
+          OUTPUT CONTRACT: Save every required artifact before finishing. Re-open each saved file using load_file to verify it. Do not claim a missing file was saved. Use plain canonical numbers (dot decimal; no comma separators or percent symbols) in numeric JSON/CSV fields. Preserve the original user request, including an explicit no-web restriction; in that mode use supplied documents or clearly labelled hypotheses and never invent URLs.
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params:
+          temperature: 0.1
+          protocol: chat
+        tooling:
+          - type: function
+            config:
+              tools:
+                - name: load_file
+                - name: list_directory
+                - name: save_file
+              timeout: null
+            prefix: ''
+        thinking: null
+        memories: []
+        skills:
+          enabled: true
+          allow:
+            - ad-handoff-notes
+            - name: ad-handoff-notes
         retry:
           enabled: true
           max_attempts: 2

@@ -400,6 +400,7 @@
           </RichTooltip>
         </label>
         <textarea
+          v-autosize-textarea="field.name === 'role'"
           :id="`${modalId}-${field.name}`"
           :value="formData[field.name]"
           @input="onInput($event.target.value)"
@@ -409,7 +410,7 @@
           data-local-scroll
           rows="4"
           :readonly="isReadOnly"
-          :class="{'input-readonly': isReadOnly}"
+          :class="{'input-readonly': isReadOnly, 'system-prompt-textarea': field.name === 'role'}"
         />
       </div>
 
@@ -574,6 +575,7 @@
 import { computed, ref, reactive, watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import RichTooltip from './RichTooltip.vue'
+import vAutosizeTextarea from '../utils/autosizeTextarea'
 
 const { t } = useI18n()
 
@@ -964,6 +966,13 @@ const getSelectedLabel = () => {
   resize: vertical;
   overscroll-behavior: contain;
   transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-textarea.system-prompt-textarea {
+  min-height: min(300px, 40dvh);
+  max-height: 50dvh;
+  line-height: 1.5;
+  overflow-y: auto;
 }
 
 .form-textarea:focus {
