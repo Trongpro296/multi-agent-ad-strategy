@@ -258,6 +258,13 @@ class AgentRetryConfig(BaseConfig):
                 if any(name in names for name in self.non_retry_exception_types):
                     return False
 
+        # SDK client errors also inherit APIError. Do not let that broad class
+        # retry a structurally invalid request or rejected credentials. Explicitly
+        # configured transient 4xx codes (e.g. 408/429) remain retryable.
+        for _, _, status_code, _ in chain:
+            if status_code is not None and 400 <= status_code < 500:
+                return status_code in self.retry_on_status_codes
+
         if self.retry_on_exception_types:
             for _, names, _, _ in chain:
                 if any(name in names for name in self.retry_on_exception_types):

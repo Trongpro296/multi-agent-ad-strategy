@@ -11,6 +11,7 @@ import asyncio
 import base64
 import json
 import traceback
+import uuid
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
@@ -35,7 +36,8 @@ from runtime.node.agent.memory.memory_base import (
 from runtime.node.agent import ThinkingPayload
 from runtime.node.agent import ModelProvider, ProviderRegistry, ModelResponse
 from runtime.node.agent.skills import AgentSkillManager
-from utils.exceptions import SecurityError, ValidationError
+from utils.exceptions import SecurityError, ValidationError, WorkflowExecutionError
+from runtime.node.agent.providers.response import ProviderResponseError
 from utils.workspace_paths import resolve_workspace_path, validate_path_component
 from tenacity import Retrying, retry_if_exception, stop_after_attempt, wait_random_exponential
 
@@ -75,6 +77,9 @@ class AgentNodeExecutor(NodeExecutor):
             memory_query_snapshot = self._build_memory_query_snapshot(inputs, input_data)
             input_mode = agent_config.input_mode or AgentInputMode.PROMPT
             external_tool_specs = self.tool_manager.get_tool_specs(agent_config.tooling)
+            disabled = set(self.context.global_state.get("disabled_tool_names") or [])
+            external_tool_specs = [spec for spec in external_tool_specs
+                                   if spec.name not in disabled and spec.metadata.get("original_name") not in disabled]
             skill_manager = self._build_skill_manager(node, agent_config, external_tool_specs)
 
             provider = provider_class(agent_config)
@@ -157,6 +162,9 @@ class AgentNodeExecutor(NodeExecutor):
                     input_mode,
                 )
 
+            validator = self.context.global_state.get("node_result_validator")
+            if callable(validator) and isinstance(final_message, Message):
+                validator(node.id, final_message, self.context.global_state)
             self._update_memory(node, input_data, inputs, final_message)
 
             if isinstance(final_message, Message):
@@ -167,17 +175,15 @@ class AgentNodeExecutor(NodeExecutor):
                 source=node.id,
             )]
             
-        except SecurityError:
+        except (SecurityError, WorkflowExecutionError):
             raise
         except Exception as e:
             traceback.print_exc()
             error_msg = f"[Node: {node.id}] Error calling model: {str(e)}"
-            self.log_manager.error(error_msg)
-            return [self._build_message(
-                role=MessageRole.ASSISTANT,
-                content=f"Error calling model {node.model_name}: {str(e)}\n\nOriginal input: {input_data[:200]}...",
-                source=node.id,
-            )]
+            self.log_manager.error(error_msg, node_id=node.id)
+            # An error string is not an Agent result: unconditional edges would
+            # otherwise spend tokens downstream before a distant gate noticed.
+            raise WorkflowExecutionError(error_msg, node_id=node.id) from e
         finally:
             self._current_node_id = None
     
@@ -262,6 +268,9 @@ class AgentNodeExecutor(NodeExecutor):
         parts: List[str] = []
         if node.role:
             parts.append(node.role)
+        request = self.context.global_state.get("agent_request_constraints")
+        if request:
+            parts.append("Original user request (preserve its constraints):\n" + request)
 
         if skill_manager is not None:
             skills_xml = skill_manager.build_available_skills_xml()
@@ -372,10 +381,53 @@ class AgentNodeExecutor(NodeExecutor):
 
         last_input = ''.join(msg.text_content() for msg in conversation) if conversation else ""
         self._record_model_call(node, last_input, None, CallStage.BEFORE)
-        response = self._execute_with_retry(node, retry_policy, _call_provider)
+        try:
+            response = self._execute_with_retry(node, retry_policy, _call_provider)
+        except ProviderResponseError as exc:
+            diagnostic_path = self._save_provider_diagnostic(node, conversation, exc)
+            validator = self.context.global_state.get("node_result_validator")
+            if exc.reason == "empty_response" and callable(validator):
+                # File-only completion is legitimate only when all required outputs
+                # can be independently verified; do not spend another model call.
+                recovered = Message(role=MessageRole.ASSISTANT, content="")
+                validator(node.id, recovered, self.context.global_state)
+                if not recovered.text_content().strip():
+                    raise
+                response = ModelResponse(message=recovered, finish_reason="artifact_receipts_verified")
+                self._record_model_call(node, last_input, response, CallStage.AFTER)
+                return response
+            self.log_manager.error(str(exc), node_id=node.id,
+                                   details={"finish_reason": exc.reason, "model_name": node.model_name,
+                                            "provider_diagnostics": exc.diagnostics,
+                                            "diagnostic_file": diagnostic_path})
+            raise
         self.log_manager.debug(response.str_raw_response())
         self._record_model_call(node, last_input, response, CallStage.AFTER)
         return response
+
+    def _save_provider_diagnostic(self, node, conversation, error):
+        """Save failure metadata without headers, keys or a copy of the request."""
+        root = self.context.global_state.get("python_workspace_root")
+        if not root:
+            return None
+        try:
+            root = Path(root).resolve()
+            folder = root / "diagnostics"
+            if not folder.resolve().is_relative_to(root):
+                return None
+            folder.mkdir(parents=True, exist_ok=True)
+            path = folder / ("provider_" + uuid.uuid4().hex + ".json")
+            payload = {"node_id": node.id, "model_name": node.model_name,
+                       "finish_reason": error.reason, "provider_response": error.diagnostics,
+                       "request_summary": [{"role": m.role.value,
+                                            "text_characters": len(m.text_content()),
+                                            "tool_names": [c.function_name for c in (m.tool_calls or [])]}
+                                           for m in conversation]}
+            path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            return str(path.relative_to(root))
+        except (OSError, ValueError, TypeError) as exc:
+            self.log_manager.warning("Could not save provider diagnostic: " + type(exc).__name__, node_id=node.id)
+            return None
 
     def _record_model_call(
         self,
@@ -386,7 +438,8 @@ class AgentNodeExecutor(NodeExecutor):
     ) -> None:
         """Record model invocation to the log manager."""
         response_text = response.message.text_content() if response else None
-        call_details = {"has_tool_calls": response.has_tool_calls()} if response else {}
+        call_details = {"has_tool_calls": response.has_tool_calls(),
+                        "finish_reason": getattr(response, "finish_reason", None)} if response else {}
         self.log_manager.record_model_call(
             node.id,
             node.model_name,
@@ -588,10 +641,10 @@ class AgentNodeExecutor(NodeExecutor):
                 return self._finalize_tool_trace(assistant_message, trace_messages, True, node.id)
 
             if iteration >= loop_limit:
-                self.log_manager.warning(
-                    f"[Node: {node.id}] Tool call limit {loop_limit} reached, returning last assistant response"
+                raise WorkflowExecutionError(
+                    f"Tool call limit {loop_limit} reached with pending calls; node is incomplete",
+                    node_id=node.id,
                 )
-                return self._finalize_tool_trace(assistant_message, trace_messages, False, node.id)
 
             iteration += 1
 
@@ -626,6 +679,7 @@ class AgentNodeExecutor(NodeExecutor):
         """Execute a batch of tool calls and return conversation + timeline events."""
         messages: List[Message] = []
         events: List[Any] = []
+        skill_followups: List[Message] = []
         model = node.as_config(AgentConfig)
         
         # Build map for fast lookup
@@ -668,17 +722,23 @@ class AgentNodeExecutor(NodeExecutor):
                         with self.log_manager.tool_timer(node.id, tool_name):
                             result = self._execute_skill_tool(tool_name, arguments, skill_manager)
 
+                        # The complete instructions are injected as a system message
+                        # below. Keep the tool receipt small instead of duplicating
+                        # the same SKILL.md in every subsequent model request.
+                        receipt = result
+                        if tool_name == "activate_skill" and isinstance(result, dict):
+                            receipt = {k: result[k] for k in ("skill_name", "allowed_tools", "available_files") if k in result}
+                            receipt["instructions_loaded"] = True
                         tool_message = self._build_tool_message(
-                            result,
+                            receipt,
                             tool_call,
                             node_id=node.id,
                             tool_name=tool_name,
                         )
-                        events.append(self._build_function_call_output_event(tool_call, result))
+                        events.append(self._build_function_call_output_event(tool_call, receipt))
                         system_message = self._build_skill_followup_message(tool_name, result, node.id)
                         if system_message is not None:
-                            messages.append(system_message)
-                            events.append(system_message)
+                            skill_followups.append(system_message)
                         self.log_manager.record_tool_call(
                             node.id,
                             tool_name,
@@ -850,6 +910,11 @@ class AgentNodeExecutor(NodeExecutor):
                 else:
                     context_state["node_id"] = previous_node_id
 
+        # Finish the entire tool batch before injecting new instructions. A system
+        # message between a call and its result makes some gateways synthesize an
+        # empty result, duplicating the real result later in the conversation.
+        messages.extend(skill_followups)
+        events.extend(skill_followups)
         return messages, events
 
     def _build_skill_followup_message(

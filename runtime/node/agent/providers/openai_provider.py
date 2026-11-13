@@ -2,6 +2,7 @@
 
 import base64
 import hashlib
+import json
 import re
 
 import binascii
@@ -25,6 +26,7 @@ from entity.tool_spec import ToolSpec
 from runtime.node.agent import ModelProvider
 from runtime.node.agent import ModelResponse
 from utils.token_tracker import TokenUsage
+from .response import ProviderResponseError, validate_tool_calls
 
 
 class OpenAIProvider(ModelProvider):
@@ -45,10 +47,12 @@ class OpenAIProvider(ModelProvider):
             return OpenAI(
                 api_key=self.api_key,
                 base_url=self.base_url,
+                max_retries=0,
             )
         else:
             return OpenAI(
                 api_key=self.api_key,
+                max_retries=0,
             )
 
     def call_model(
@@ -69,25 +73,35 @@ class OpenAIProvider(ModelProvider):
             request_payload = self._build_chat_payload(conversation, tool_specs, kwargs)
             response = client.chat.completions.create(**request_payload)
             self._track_token_usage(response)
-            self._append_chat_response_output(timeline, response)
             message = self._deserialize_chat_response(response)
-            return ModelResponse(message=message, raw_response=response)
+            validate_tool_calls(message)
+            self._append_chat_response_output(timeline, response)
+            return ModelResponse(message=message, raw_response=response,
+                                 finish_reason=str(response.choices[0].finish_reason))
 
         # 2. Try Responses API with fallback
         request_payload = self._build_request_payload(timeline, tool_specs, kwargs)
         try:
             response = client.responses.create(**request_payload)
-            self._track_token_usage(response)
-            self._append_response_output(timeline, response)
-            message = self._deserialize_response(response)
-            return ModelResponse(message=message, raw_response=response)
-        except Exception as e:
+        except openai.APIStatusError as exc:
+            # Only unsupported endpoints justify a second request in another protocol.
+            # Malformed output, refusal, rate limits and truncation are not API discovery.
+            if exc.status_code not in (404, 405, 501):
+                raise
             new_request_payload = self._build_chat_payload(conversation, tool_specs, kwargs)
             response = client.chat.completions.create(**new_request_payload)
             self._track_token_usage(response)
-            self._append_chat_response_output(timeline, response)
             message = self._deserialize_chat_response(response)
-            return ModelResponse(message=message, raw_response=response)
+            validate_tool_calls(message)
+            self._append_chat_response_output(timeline, response)
+            return ModelResponse(message=message, raw_response=response,
+                                 finish_reason=str(response.choices[0].finish_reason))
+        self._track_token_usage(response)
+        message = self._deserialize_response(response)
+        validate_tool_calls(message)
+        self._append_response_output(timeline, response)
+        return ModelResponse(message=message, raw_response=response,
+                             finish_reason=getattr(response, "status", None))
 
     def _is_chat_completions_mode(self, client: Any) -> bool:
         """Determine if we should use standard chat completions instead of responses API."""
@@ -173,6 +187,8 @@ class OpenAIProvider(ModelProvider):
     ) -> Dict[str, Any]:
         """Construct the Responses API payload from event timeline."""
         params = dict(raw_params)
+        params.pop("protocol", None)
+        params.pop("tool_loop_limit", None)
         max_tokens = params.pop("max_tokens", None)
         max_output_tokens = params.pop("max_output_tokens", None)
         if max_output_tokens is None and max_tokens is not None:
@@ -234,6 +250,8 @@ class OpenAIProvider(ModelProvider):
     ) -> Dict[str, Any]:
         """Construct standard Chat Completions API payload."""
         params = dict(raw_params)
+        params.pop("protocol", None)
+        params.pop("tool_loop_limit", None)
         max_output_tokens = params.pop("max_output_tokens", None)
         max_tokens = params.pop("max_tokens", None)
         if max_tokens is None and max_output_tokens is not None:
@@ -308,7 +326,9 @@ class OpenAIProvider(ModelProvider):
         """Convert internal Message to standard Chat Completions schema."""
         role_value = message.role.value
         blocks = message.blocks()
-        if not blocks or message.role == MessageRole.TOOL:
+        if message.role == MessageRole.TOOL and blocks:
+            content = self._chat_tool_output_text(blocks)
+        elif not blocks:
             content = message.text_content()
         else:
             content = self._transform_blocks_for_chat(self._serialize_blocks(blocks, message.role))
@@ -329,14 +349,21 @@ class OpenAIProvider(ModelProvider):
         """Convert tool result to standard Chat Completions schema."""
         text = event.output_text or ""
         if event.output_blocks:
-             # simple concatenation for tool output in chat mode
-             text = "\n".join(b.describe() for b in event.output_blocks)
+            text = self._chat_tool_output_text(event.output_blocks)
         
         return {
             "role": "tool",
             "tool_call_id": event.call_id or "tool_call",
             "content": text,
         }
+
+    def _chat_tool_output_text(self, blocks: List[MessageBlock]) -> str:
+        """Chat tool messages need file text, not attachment metadata alone."""
+        parts = []
+        for block in blocks:
+            inline = self._maybe_inline_text_file(block) if block.attachment else None
+            parts.append(inline if inline is not None else block.describe())
+        return "\n".join(part for part in parts if part)
 
     def _transform_blocks_for_chat(self, blocks: List[Dict[str, Any]]) -> Union[str, List[Dict[str, Any]]]:
         """Convert Responses block types to Chat block types (e.g., input_text -> text)."""
@@ -360,9 +387,25 @@ class OpenAIProvider(ModelProvider):
         """Convert Chat Completions output to internal Message."""
         choices = self._get_attr(response, "choices") or []
         if not choices:
-            return Message(role=MessageRole.ASSISTANT, content="")
+            raise ProviderResponseError("missing_choices", "Expected Chat Completions JSON")
             
         choice = choices[0]
+        reason = self._get_attr(choice, "finish_reason")
+        if reason not in ("stop", "tool_calls", "function_call"):
+            msg = self._get_attr(choice, "message")
+            content = self._get_attr(msg, "content") or ""
+            calls = self._get_attr(msg, "tool_calls") or []
+            raise ProviderResponseError(str(reason or "missing_finish_reason"), diagnostics={
+                "response_id": self._get_attr(response, "id"),
+                "response_model": self._get_attr(response, "model"),
+                "finish_reason": reason,
+                "content_characters": len(str(content)),
+                "content_preview": str(content)[:2000],
+                "tool_calls": [{"id": self._get_attr(c, "id"),
+                                "name": self._get_attr(self._get_attr(c, "function"), "name"),
+                                "arguments_characters": len(str(self._get_attr(self._get_attr(c, "function"), "arguments") or ""))}
+                               for c in calls[:20]],
+            })
         msg = self._get_attr(choice, "message")
         
         tool_calls: List[ToolCallPayload] = []
@@ -373,7 +416,7 @@ class OpenAIProvider(ModelProvider):
                 function_name = self._get_attr(f_data, "name") or ""
                 arguments = self._get_attr(f_data, "arguments") or ""
                 if not isinstance(arguments, str):
-                    arguments = str(arguments)
+                    arguments = json.dumps(arguments, ensure_ascii=False)
                 call_id = self._get_attr(tc, "id")
                 if not call_id:
                     call_id = self._build_tool_call_id(function_name, arguments, fallback_prefix=f"tool_call_{idx}")
@@ -386,6 +429,8 @@ class OpenAIProvider(ModelProvider):
         
         content = self._get_attr(msg, "content") or ""
         content = self._strip_thinking_tokens(content)
+        if not content and not tool_calls:
+            raise ProviderResponseError("empty_response", f"finish_reason={reason}")
 
         return Message(
             role=MessageRole.ASSISTANT,
@@ -417,7 +462,7 @@ class OpenAIProvider(ModelProvider):
                 function_name = tc.function.name
                 arguments = tc.function.arguments or ""
                 if not isinstance(arguments, str):
-                    arguments = str(arguments)
+                    arguments = json.dumps(arguments, ensure_ascii=False)
                 call_id = tc.id or self._build_tool_call_id(function_name, arguments, fallback_prefix=f"tool_call_{idx}")
                 assistant_msg["tool_calls"].append({
                     "id": call_id,
@@ -564,7 +609,9 @@ class OpenAIProvider(ModelProvider):
             "application/x-ndjson",
             "application/ndjson",
         } or name.endswith((".json", ".jsonl", ".ndjson"))
-        if not (mime.startswith("text/") or is_json):
+        # Windows commonly guesses application/vnd.ms-excel for a plain CSV.
+        is_csv = "text/csv" in mime or name.endswith(".csv")
+        if not (mime.startswith("text/") or is_json or is_csv):
             return None
         if attachment.remote_file_id:
             return None  # nothing to inline if already remote-only
@@ -573,7 +620,6 @@ class OpenAIProvider(ModelProvider):
         if text is None:
             return None
 
-        is_csv = "text/csv" in mime or name.endswith(".csv")
         limit_attr = "csv_inline_char_limit" if is_csv else "text_inline_char_limit"
         default_limit = self.CSV_INLINE_CHAR_LIMIT if is_csv else self.TEXT_INLINE_CHAR_LIMIT
         limit = getattr(self, limit_attr, default_limit)
@@ -606,7 +652,7 @@ class OpenAIProvider(ModelProvider):
         if data_bytes is None:
             return None
         try:
-            return data_bytes.decode("utf-8")
+            return data_bytes.decode("utf-8-sig")
         except UnicodeDecodeError:
             return data_bytes.decode("utf-8", errors="replace")
 
@@ -625,6 +671,11 @@ class OpenAIProvider(ModelProvider):
 
     def _deserialize_response(self, response: Any) -> Message:
         """Convert Responses API output to internal Message."""
+        if getattr(response, "object", None) != "response":
+            raise ProviderResponseError("response_format_mismatch", "Expected Responses API JSON; configure protocol=chat for a Chat-compatible gateway")
+        status = getattr(response, "status", None)
+        if status != "completed":
+            raise ProviderResponseError(str(status or "missing_response_status"))
         output_blocks = getattr(response, "output", []) or []
         assistant_blocks: List[MessageBlock] = []
         tool_calls: List[ToolCallPayload] = []
@@ -650,6 +701,9 @@ class OpenAIProvider(ModelProvider):
             fallback_text = self._extract_fallback_text(response)
             if fallback_text:
                 assistant_blocks.append(MessageBlock(MessageBlockType.TEXT, text=fallback_text))
+
+        if not any(block.text for block in assistant_blocks) and not tool_calls and not any(block.attachment for block in assistant_blocks):
+            raise ProviderResponseError("empty_response", "Responses API returned no usable output")
 
         return Message(
             role=MessageRole.ASSISTANT,

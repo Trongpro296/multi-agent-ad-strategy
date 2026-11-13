@@ -13,6 +13,7 @@ from entity.configs.node.python_runner import PythonRunnerConfig
 from entity.messages import Message, MessageRole
 from runtime.node.executor.base import NodeExecutor
 from utils.code_execution import require_unsafe_code_execution
+from utils.execution_markers import EXEC_FAILURE
 
 
 _CODE_BLOCK_RE = re.compile(r"```(?P<lang>[a-zA-Z0-9_+-]*)?\s*\n(?P<code>.*?)```", re.DOTALL)
@@ -127,6 +128,9 @@ class PythonNodeExecutor(NodeExecutor):
             cmd.extend(config.args)
         cmd.append(str(script_path))
         env = os.environ.copy()
+        # stdout/stderr are pipes, so Windows otherwise falls back to its ANSI codec.
+        env["PYTHONIOENCODING"] = config.encoding
+        env.setdefault("PYTHONUTF8", "1")
         env.update(config.env or {})
         env.update(
             {
@@ -139,6 +143,7 @@ class PythonNodeExecutor(NodeExecutor):
             completed = subprocess.run(
                 cmd,
                 cwd=str(workspace),
+                env=env,
                 capture_output=True,
                 check=False,
                 timeout=config.timeout_seconds,
@@ -188,7 +193,7 @@ class PythonNodeExecutor(NodeExecutor):
         if stderr:
             metadata["stderr"] = stderr
 
-        content_lines = ["==CODE EXECUTION FAILED==", error_text]
+        content_lines = [EXEC_FAILURE, error_text]
         if exit_code is not None:
             content_lines.append(f"exit_code={exit_code}")
         if stderr:

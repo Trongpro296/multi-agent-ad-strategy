@@ -6,6 +6,7 @@ from entity.configs.edge.edge_condition import KeywordEdgeConditionConfig
 from .base import ConditionFactoryContext
 from .base import EdgeConditionManager
 from ...node.executor import ExecutionContext
+from utils.execution_markers import execution_marker_aliases
 
 
 class KeywordEdgeConditionManager(EdgeConditionManager[KeywordEdgeConditionConfig]):
@@ -17,12 +18,10 @@ class KeywordEdgeConditionManager(EdgeConditionManager[KeywordEdgeConditionConfi
         self.case_sensitive = bool(config.case_sensitive)
         self.default_value = bool(config.default)
         lowered_regex_flags = 0 if self.case_sensitive else re.IGNORECASE
-        if self.case_sensitive:
-            self.processed_any = self.any_keywords
-            self.processed_none = self.none_keywords
-        else:
-            self.processed_any = [kw.lower() for kw in self.any_keywords]
-            self.processed_none = [kw.lower() for kw in self.none_keywords]
+        self.processed_any = [alias for kw in self.any_keywords
+                              for alias in execution_marker_aliases(kw, case_sensitive=self.case_sensitive)]
+        self.processed_none = [alias for kw in self.none_keywords
+                               for alias in execution_marker_aliases(kw, case_sensitive=self.case_sensitive)]
         self.compiled_regex = [re.compile(pattern, lowered_regex_flags) for pattern in self.regex_patterns]
         self.label = f"keyword(any={len(self.any_keywords)}, none={len(self.none_keywords)}, regex={len(self.regex_patterns)})"
         self.metadata = {

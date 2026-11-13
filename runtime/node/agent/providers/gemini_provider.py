@@ -24,6 +24,7 @@ from entity.tool_spec import ToolSpec
 from runtime.node.agent import ModelProvider
 from runtime.node.agent import ModelResponse
 from utils.token_tracker import TokenUsage
+from .response import ProviderResponseError, validate_tool_calls
 
 
 class GeminiProvider(ModelProvider):
@@ -72,9 +73,12 @@ class GeminiProvider(ModelProvider):
         # print(response)
 
         self._track_token_usage(response)
-        self._append_response_contents(timeline, response)
         message = self._deserialize_response(response)
-        return ModelResponse(message=message, raw_response=response)
+        validate_tool_calls(message)
+        self._append_response_contents(timeline, response)
+        candidate = self._select_primary_candidate(response)
+        return ModelResponse(message=message, raw_response=response,
+                             finish_reason=str(getattr(candidate, "finish_reason", "")))
 
     def extract_token_usage(self, response: Any) -> TokenUsage:
         """Extract token usage from Gemini usage metadata."""
@@ -225,6 +229,8 @@ class GeminiProvider(ModelProvider):
     def _general_parts_to_function_response_parts(self, parts: List[genai_types.Part]) -> List[genai_types.FunctionResponsePart]:
         function_response_parts: List[genai_types.FunctionResponsePart] = []
         for part in parts:
+            if getattr(part, "thought", False):
+                continue
             if part.inline_data:
                 # Convert inline_data (bytes) to base64 data URI and use from_uri
                 function_response_parts.append(
@@ -681,16 +687,24 @@ class GeminiProvider(ModelProvider):
     def _deserialize_response(self, response: Any) -> Message:
         candidate = self._select_primary_candidate(response)
         if not candidate:
-            return Message(role=MessageRole.ASSISTANT, content="")
+            raise ProviderResponseError("missing_candidates")
+
+        reason = getattr(candidate, "finish_reason", None)
+        name = getattr(reason, "name", str(reason or "")).split(".")[-1].upper()
+        if name != "STOP":
+            raise ProviderResponseError(name or "missing_finish_reason")
 
         content = getattr(candidate, "content", None)
         if not content:
-            return Message(role=MessageRole.ASSISTANT, content=response.text if hasattr(response, "text") else "")
+            raise ProviderResponseError("empty_response")
 
         blocks, tool_calls = self._parse_candidate_parts(getattr(content, "parts", []) or [])
         if not blocks:
             fallback = getattr(response, "text", None) or ""
             blocks = [MessageBlock(MessageBlockType.TEXT, text=fallback)] if fallback else []
+
+        if not any(block.text or block.attachment for block in blocks) and not tool_calls:
+            raise ProviderResponseError("empty_response")
 
         return Message(
             role=MessageRole.ASSISTANT,
@@ -751,7 +765,8 @@ class GeminiProvider(ModelProvider):
         return blocks, tool_calls
 
     def _build_tool_call_payload(self, fn_call: Any, *, thought_signature: Any = None) -> ToolCallPayload:
-        call_id = getattr(fn_call, "name", "") or uuid.uuid4().hex
+        # Multiple save_file calls may legitimately share a function name.
+        call_id = getattr(fn_call, "id", None) or uuid.uuid4().hex
         arguments = getattr(fn_call, "args", {}) or {}
         try:
             arg_str = json.dumps(arguments, ensure_ascii=False)

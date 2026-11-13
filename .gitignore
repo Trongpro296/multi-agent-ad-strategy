@@ -20,6 +20,9 @@ frontend/.vscode/
 
 # Environment
 .env
+.env.*
+!.env.example
+!.env.docker
 
 # Project Specific
 logs/
@@ -27,4 +30,14 @@ node_modules/
 data/
 temp/
 WareHouse/
+
+# Local checks, reports and rollback copies
+.pytest_cache/
+.ruff_cache/
+audit_reports/
+workflow_backups/
+
+# Recovery workflows contain files from a particular campaign/session
+yaml_instance/ad_agency_recovery*.yaml
+yaml_instance/ad_agency_recovery*.recovery.json
 

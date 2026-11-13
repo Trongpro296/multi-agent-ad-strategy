@@ -245,18 +245,23 @@
             :id="`${modalId}-${field.name}`"
             :value="inputValue"
             class="form-input custom-select-input"
-            readonly
+            :readonly="isReadOnly"
             :class="{'input-readonly': isReadOnly}"
             :placeholder="$t('dynamic_form_field.type_to_filter')"
             autocomplete="off"
+            @focus="openDropdown"
+            @click.stop="openDropdown"
+            @input="onFilterInput"
+            @keydown="handleDropdownKeydown"
           />
           <Teleport to="body">
             <div
               v-if="showDropdown && !isReadOnly"
+              ref="selectDropdown"
               class="custom-select-dropdown"
               data-local-scroll
               :style="dropdownStyle"
-              @mousedown.prevent
+              @mousedown.stop
               @wheel="handleLocalScrollWheel"
               @scroll.stop
               @touchmove.stop
@@ -265,7 +270,7 @@
                 v-if="!field.required"
                 class="custom-select-option"
                 :class="{ 'option-selected': formData[field.name] === null }"
-                @mousedown.stop="selectOption(null)"
+                @click.stop="selectOption(null)"
               >
                 None
               </div>
@@ -275,7 +280,7 @@
                 class="custom-select-option"
                 :class="{ 'option-selected': formData[field.name] === (typeof option === 'string' ? option : option.value) }"
                 :title="typeof option === 'string' ? '' : (option.description || '')"
-                @mousedown.stop="selectOption(typeof option === 'string' ? option : option.value)"
+                @click.stop="selectOption(typeof option === 'string' ? option : option.value)"
               >
                 {{
                   typeof option === 'string'
@@ -646,6 +651,7 @@ const internalFormData = computed(() => props.formData)
 const showDropdown = ref(false)
 const filterText = ref('')
 const selectWrapper = ref(null)
+const selectDropdown = ref(null)
 const dropdownRect = reactive({
   top: 0,
   left: 0,
@@ -669,34 +675,40 @@ const dropdownStyle = computed(() => ({
   zIndex: 10000
 }))
 
+const openDropdown = () => {
+  if (props.isReadOnly || showDropdown.value) return
+  filterText.value = ''
+  updateDropdownPosition()
+  showDropdown.value = true
+  window.addEventListener('scroll', closeOnScroll, true)
+  window.addEventListener('mousedown', handleOutsideClick)
+}
+
 const toggleDropdown = () => {
-  if (props.isReadOnly) return
-  if (!showDropdown.value) {
-    updateDropdownPosition()
-    showDropdown.value = true
-    // Add escape listener
-    window.addEventListener('scroll', closeOnScroll, true)
-    window.addEventListener('mousedown', handleOutsideClick)
-  } else {
-    closeDropdown()
-  }
+  if (showDropdown.value) closeDropdown()
+  else openDropdown()
 }
 
 const closeDropdown = () => {
   showDropdown.value = false
+  filterText.value = ''
   window.removeEventListener('scroll', closeOnScroll, true)
   window.removeEventListener('mousedown', handleOutsideClick)
 }
 
-const closeOnScroll = () => {
+const closeOnScroll = (event) => {
+  // The menu is teleported to body; its scroll must not close the menu.
+  if (selectDropdown.value?.contains(event.target)) return
   if (showDropdown.value) closeDropdown()
 }
 
 const handleOutsideClick = (e) => {
-  if (selectWrapper.value && !selectWrapper.value.contains(e.target)) {
+  if (!selectWrapper.value?.contains(e.target) && !selectDropdown.value?.contains(e.target)) {
     closeDropdown()
   }
 }
+
+onUnmounted(closeDropdown)
 
 const isList = computed(() => {
   return props.field.type && props.field.type.includes('list[')
@@ -779,8 +791,29 @@ const onBooleanSwitchChange = (checked) => {
 
 // Custom select methods
 const onFilterInput = (event) => {
-  filterText.value = event.target.value
-  showDropdown.value = true
+  const value = event.target.value
+  openDropdown()
+  filterText.value = value
+}
+
+const handleDropdownKeydown = (event) => {
+  if (!showDropdown.value) return
+  if (event.isComposing) {
+    event.stopPropagation()
+    return
+  }
+  if (event.key === 'Escape' || event.key === 'Enter') {
+    // Keep FormGenerator's window handler from closing/submitting the modal.
+    event.preventDefault()
+    event.stopPropagation()
+    if (event.key === 'Escape') closeDropdown()
+    else if (filteredOptions.value.length) {
+      const option = filteredOptions.value[0]
+      selectOption(typeof option === 'string' ? option : option.value)
+    }
+  } else if (event.key === 'Tab') {
+    closeDropdown()
+  }
 }
 
 const handleLocalScrollWheel = (event) => {
@@ -809,14 +842,6 @@ const handleLocalScrollWheel = (event) => {
   if ((isScrollingUp && atTop) || (isScrollingDown && atBottom)) {
     event.preventDefault()
   }
-}
-
-const handleInputBlur = () => {
-  // Delay hiding dropdown to allow option selection
-  setTimeout(() => {
-    showDropdown.value = false
-    filterText.value = ''
-  }, 200)
 }
 
 const selectOption = (value) => {

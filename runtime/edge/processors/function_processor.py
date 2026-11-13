@@ -5,7 +5,7 @@ from typing import Any, Callable, Mapping
 from entity.messages import Message
 from utils.log_manager import LogManager
 from utils.structured_logger import get_server_logger
-from utils.exceptions import SecurityError
+from utils.exceptions import SecurityError, WorkflowExecutionError
 from .base import EdgePayloadProcessor, ProcessorFactoryContext
 from entity.configs.edge.edge_processor import FunctionEdgeProcessorConfig
 from runtime.node.executor import ExecutionContext
@@ -36,7 +36,7 @@ class FunctionEdgePayloadProcessor(EdgePayloadProcessor[FunctionEdgeProcessorCon
             return payload
         try:
             result = self._callable(payload.text_content(), context.global_state)
-        except SecurityError:
+        except (SecurityError, WorkflowExecutionError):
             raise
         except Exception as exc:  # pragma: no cover - defensive logging
             error_msg = f"Processor function '{self._name}' failed: {exc}"

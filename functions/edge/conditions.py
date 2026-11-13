@@ -1,6 +1,7 @@
 """Edge condition helpers used by workflow YAML definitions."""
 
 import re
+from utils.execution_markers import has_execution_failure as _has_exec_failure
 
 def contains_keyword(data: str) -> bool:
     """Check if data contains the keyword 'trigger'."""
@@ -19,10 +20,10 @@ def not_contains_keyword(data: str) -> bool:
     return "trigger" not in data.lower()
 
 def code_pass(data: str) -> bool:
-    return "==CODE EXECUTION FAILED==" not in data
+    return not _has_exec_failure(data)
 
 def code_fail(data: str) -> bool:
-    return "==CODE EXECUTION FAILED==" in data
+    return _has_exec_failure(data)
 
 def _extract_verdict(data: str) -> str | None:
     """Parse `Verdict: CONTINUE|STOP` markers from agent outputs."""

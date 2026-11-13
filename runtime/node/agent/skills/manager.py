@@ -168,6 +168,9 @@ class AgentSkillManager:
                 lines.append("    </allowed_tools>")
             lines.append("  </skill>")
         lines.append("</available_skills>")
+        lines.append("Skill locations are not workspace paths: do not use file tools to browse them. "
+                     "activate_skill loads SKILL.md; read_skill_file is only for an actual available_files entry. "
+                     "Do not read SKILL.md again after activation or invent reference paths.")
         return "\n".join(lines)
 
     def activate_skill(self, skill_name: str) -> Dict[str, str | List[str]]:
@@ -183,7 +186,15 @@ class AgentSkillManager:
             "path": str(skill.skill_file),
             "instructions": cached,
             "allowed_tools": list(skill.allowed_tools),
+            "available_files": self._available_files(skill),
         }
+
+    def _available_files(self, skill: SkillMetadata) -> List[str]:
+        return sorted(str(p.relative_to(skill.skill_dir)).replace("\\", "/")
+                      for p in skill.skill_dir.rglob("*")
+                      if p.is_file() and not p.is_symlink()
+                      and p.resolve().is_relative_to(skill.skill_dir)
+                      and p.stat().st_size <= MAX_SKILL_FILE_BYTES)
 
     def read_skill_file(self, skill_name: str, relative_path: str) -> Dict[str, str]:
         skill = self._get_skill(skill_name)
@@ -201,7 +212,7 @@ class AgentSkillManager:
             raise ValueError("relative_path must stay within the skill directory") from exc
 
         if not candidate.exists() or not candidate.is_file():
-            raise ValueError(f"Skill file '{normalized}' not found")
+            raise ValueError(f"Skill file '{normalized}' not found. Available files: {self._available_files(skill)}")
         if candidate.stat().st_size > MAX_SKILL_FILE_BYTES:
             raise ValueError(f"Skill file '{normalized}' exceeds the {MAX_SKILL_FILE_BYTES} byte limit")
 
@@ -248,7 +259,7 @@ class AgentSkillManager:
             ),
             ToolSpec(
                 name="read_skill_file",
-                description="Read a text file inside an activated skill directory, such as references or scripts.",
+                description="Read an actual available_files entry returned by activate_skill. SKILL.md is already loaded; do not invent paths.",
                 parameters={
                     "type": "object",
                     "properties": {
@@ -258,7 +269,7 @@ class AgentSkillManager:
                         },
                         "relative_path": {
                             "type": "string",
-                            "description": "Path relative to the skill directory, for example references/example.md.",
+                            "description": "Exact relative path from activate_skill.available_files. Do not use an example or guessed filename.",
                         },
                     },
                     "required": ["skill_name", "relative_path"],

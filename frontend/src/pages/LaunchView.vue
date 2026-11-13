@@ -13,14 +13,13 @@
     <div class="content">
       <!-- Left panel -->
       <div class="left-panel">
-        <!-- Chat Panel: fullscreen in chat mode, overlay in graph -->
+        <!-- Chat and graph share the available width; message content stays inside its panel. -->
         <div
           class="chat-panel"
           :class="{
             'chat-panel-fullscreen': viewMode === 'chat',
             'chat-panel-collapsed': viewMode !== 'chat' && !isChatPanelOpen
           }"
-          v-show="viewMode === 'chat' || true"
         >
           <button v-show="viewMode !== 'chat'" class="chat-panel-toggle" @click="isChatPanelOpen = !isChatPanelOpen" :title="isChatPanelOpen ? $t('launch.collapse_chat') : $t('launch.expand_chat')">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" :class="{ 'chevron-collapsed': !isChatPanelOpen }">
@@ -1642,6 +1641,13 @@ onNodesInitialized(() => {
   requestAnimationFrame(() => fitView?.({ padding: 0.1 }))
 })
 
+// Fit only after a layout change requested by the user, preserving zoom during execution.
+watch([viewMode, isChatPanelOpen], async () => {
+  if (viewMode.value !== 'graph') return
+  await nextTick()
+  requestAnimationFrame(() => fitView?.({ padding: 0.1 }))
+})
+
 const syncNodeAndEdgeData = () => {
   try {
     const yamlNodes = workflowYaml.value?.graph?.nodes || []
@@ -2446,6 +2452,8 @@ watch(
 .launch-view {
   width: 100%;
   height: 100vh;
+  height: 100dvh;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   background-color: #1a1a1a;
@@ -2513,6 +2521,8 @@ watch(
 
 .content {
   flex: 1;
+  min-height: 0;
+  min-width: 0;
   display: flex;
   overflow: hidden;
   padding: 20px;
@@ -2523,27 +2533,27 @@ watch(
 
 /* Left Panel */
 .left-panel {
-  flex: 3;
+  flex: 1;
   display: flex;
-  flex-direction: column;
-  gap: 20px;
+  flex-direction: row;
+  gap: 12px;
+  min-height: 0;
   min-width: 0; /* Prevents overflow */
   position: relative;
 }
 
 /* Persistent Chat Panel */
 .chat-panel {
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  width: 380px;
-  max-width: 50%;
+  position: relative;
+  width: clamp(480px, 30vw, 520px);
+  max-width: 65%;
+  min-width: 0;
+  min-height: 0;
+  flex: 0 0 auto;
   z-index: 10;
   display: flex;
   flex-direction: row;
   pointer-events: none;
-  transition: width 0.3s ease;
 }
 
 /* Full-screen chat mode */
@@ -2631,6 +2641,7 @@ watch(
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
 }
 
 .chat-messages::-webkit-scrollbar {
@@ -2652,12 +2663,22 @@ watch(
 
 .chat-messages {
   flex: 1;
+  min-width: 0;
+  min-height: 0;
   padding: 20px;
   overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
   color: #e0e0e0;
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.chat-messages > div {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* Chat Notification */
@@ -2745,6 +2766,8 @@ watch(
 /* Dialogue Messages */
 .dialogue {
   display: flex;
+  min-width: 0;
+  max-width: 100%;
   align-items: flex-start;
   gap: 12px;
   margin-bottom: 8px;
@@ -2756,7 +2779,8 @@ watch(
 
 .message-content {
   flex: 1;
-  max-width: 85%;
+  min-width: 0;
+  max-width: calc(100% - 52px);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -2774,6 +2798,8 @@ watch(
   color: rgba(255, 255, 255, 0.5);
   font-weight: 500;
   margin: 0 4px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .dialogue-right .user-name {
@@ -2798,6 +2824,9 @@ watch(
 }
 
 .message-bubble {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
@@ -2849,6 +2878,9 @@ watch(
 
 .loading-entry {
   display: flex;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
@@ -2860,6 +2892,8 @@ watch(
 }
 
 .loading-entry-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 14px;
   color: rgba(255, 255, 255, 0.9);
 }
@@ -2927,14 +2961,16 @@ watch(
 /* Artifact wrappers */
 .artifact-image-wrapper {
   padding: 10px 0;
+  max-width: 100%;
 }
 
 .artifact-file-wrapper {
   padding: 10px 0;
+  max-width: 100%;
 }
 
 .artifact-image {
-  max-width: 260px;
+  max-width: min(260px, 100%);
   max-height: 200px;
   display: block;
   cursor: zoom-in;
@@ -2943,6 +2979,8 @@ watch(
 }
 
 .artifact-filename {
+  min-width: 0;
+  max-width: 100%;
   margin-top: 4px;
   font-size: 12px;
   color: rgba(255, 255, 255, 0.7);
@@ -2960,9 +2998,8 @@ watch(
 }
 
 .artifact-filename-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .artifact-download-button {
@@ -2998,6 +3035,7 @@ watch(
 /* Input Area */
 .input-area {
   flex: 0 0 auto;
+  min-width: 0;
   min-height: 120px;
 }
 
@@ -3057,6 +3095,7 @@ watch(
 
 .task-input {
   flex: 1;
+  min-width: 0;
   padding: 16px;
   border: none;
   font-family: 'Inter', sans-serif;
@@ -3238,11 +3277,13 @@ watch(
 
 /* Right Panel */
 .right-panel {
-  flex: 1;
+  flex: 0 0 clamp(280px, 20vw, 320px);
   display: flex;
   flex-direction: column;
   gap: 20px;
-  min-width: 250px;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* Right Panel — overlay mode (graph view) */
@@ -3627,6 +3668,8 @@ watch(
 /* Graph Panel */
 .graph-panel {
   flex: 1;
+  min-width: 0;
+  min-height: 0;
   background-color: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
@@ -3701,5 +3744,43 @@ watch(
 
 .settings-button:hover {
   background-color: rgba(160, 196, 255, 0.1);
+}
+
+@media (max-width: 1000px) {
+  .content {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .right-panel:not(.right-panel-overlay) {
+    flex-basis: 240px;
+  }
+
+  .chat-panel:not(.chat-panel-fullscreen):not(.chat-panel-collapsed) {
+    width: 420px;
+  }
+
+  .chat-messages {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 640px) {
+  .content {
+    flex-direction: column;
+  }
+
+  .right-panel:not(.right-panel-overlay) {
+    flex: 0 0 auto;
+    max-height: 220px;
+  }
+
+  .chat-panel:not(.chat-panel-fullscreen) {
+    max-width: 85%;
+  }
+
+  .right-panel-overlay {
+    max-width: 85%;
+  }
 }
 </style>

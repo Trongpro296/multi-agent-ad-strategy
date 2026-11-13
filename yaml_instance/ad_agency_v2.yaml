@@ -1,0 +1,1882 @@
+version: 0.0.0
+graph:
+  id: ad_agency_v2
+  description: 'Bản đầy đủ: Human duyệt brief và kế hoạch, Plan_Gate, vòng sửa 3 lượt, bàn giao có đối chiếu phiên bản'
+  log_level: INFO
+  is_majority_voting: false
+  initial_instruction: |
+    Nhập yêu cầu chiến dịch: sản phẩm, lợi ích, giá và ưu đãi, thị trường, mục tiêu, ngân sách (phân biệt tiền quảng cáo và sản xuất), thời gian, kênh hiện có, landing page, dữ liệu cũ. Thông tin thiếu sẽ được hỏi lại hoặc ghi rõ là giả định.
+  start:
+    - Campaign_Input
+  end:
+    - Delivery
+    - Blocked_Output
+  nodes:
+    - id: Campaign_Input
+      type: passthrough
+      config:
+        only_last_message: true
+    - id: Campaign_Rules
+      type: literal
+      config:
+        role: user
+        content: |
+          QUY TẮC CHUNG (áp dụng cho mọi node):
+          1. Viết bằng tiếng Việt.
+          2. Mỗi nhận định quan trọng gắn một nhãn: [TÀI LIỆU] (từ tài liệu người dùng), [NGUỒN NGOÀI] (kèm URL và ngày truy cập), [SUY LUẬN] hoặc [GIẢ THUYẾT] (cần thử nghiệm).
+          3. Không bịa CPC, CPA, doanh thu đối thủ hoặc kết quả chiến dịch. Chưa có dữ liệu thì ghi GIẢ ĐỊNH kèm công thức, đơn vị và cơ sở.
+          4. Phân biệt tiền quảng cáo, chi phí sản xuất nội dung và chi phí khác.
+          5. Khi đã có strategy_ids.json, dùng đúng ID phân khúc (S1, S2...), offer (O1...), mục tiêu (G1) và concept (C1...).
+          6. Chỉ làm việc trong phạm vi vai trò của node này. Chỉ ghi các file được giao cho node này; không sửa hoặc ghi đè file của node khác (ngoại lệ: Plan_Assembler khi sửa theo phản hồi).
+          7. Nếu node có dòng quyết định điều phối (BRIEF:, QA:), hãy ghi nó trên MỘT dòng riêng ở cuối cùng của câu trả lời: dòng đó chỉ gồm đúng trạng thái, không có chữ nào khác cùng dòng và không có chữ nào sau nó (được phép in đậm nhẹ). Không viết trạng thái trong câu giải thích như một ví dụ hay lệnh; chỉ ghi MỘT dòng quyết định và không nhắc lại các lựa chọn khác.
+          8. Lưu file bằng save_file vào thư mục artifacts/, rồi dán lại đầy đủ nội dung các file đó trong câu trả lời để node sau đọc được.
+    - id: Brief_Router
+      type: passthrough
+      config:
+        only_last_message: true
+    - id: Review_Router
+      type: passthrough
+      config:
+        only_last_message: true
+    - id: QA_Router
+      type: passthrough
+      config:
+        only_last_message: true
+    - id: Brief_Clarification
+      type: human
+      config:
+        description: Director cần thêm thông tin để lập brief. Trả lời các câu hỏi ở trên, hoặc nhập 'Không có thêm thông tin, dùng giả định' để tiếp tục.
+    - id: Plan_Join
+      type: passthrough
+      config:
+        only_last_message: false
+    - id: Plan_Gate_Script
+      type: literal
+      config:
+        role: user
+        content: |
+          ```python
+          import csv, datetime, hashlib, json, pathlib, re, shutil
+          from decimal import Decimal, InvalidOperation
+
+          ROUTE_TOKENS = ('[[BRIEF_READY]]', '[[BRIEF_NEED_INFO]]', '[[BRIEF_INVALID]]', '[[QA_PASS]]', '[[QA_REVISE]]', '[[QA_INVALID]]', '[[PLAN_OK]]', '[[PLAN_ISSUES]]', '[[PLAN_ERROR]]', '[[BUILD_OK]]', '[[BUILD_BLOCKED]]', '[[BUILD_ERROR]]', '[[REVIEW_APPROVE]]', '[[REVIEW_REVISE]]', '[[REVIEW_INVALID]]')
+
+          def route_diagnostics(text):
+              for token in ROUTE_TOKENS:
+                  text = text.replace(token, token.replace("[[", "[ [").replace("]]", "] ]"))
+              return text.replace("[[EXEC_FAIL]]", "EXEC_FAIL (diagnostic)").replace("==CODE EXECUTION FAILED==", "CODE EXECUTION FAILED (diagnostic)")
+
+
+          A, R = pathlib.Path("artifacts"), pathlib.Path("review")
+          REVIEW_SET = ['campaign_brief.json', 'market_research.md', 'competitor_analysis.md', 'audience_segments.json', 'customer_journey.md', 'evidence_digest.md', 'sources.csv', 'brand_positioning.md', 'campaign_strategy.md', 'strategy_ids.json', 'media_plan.csv', 'budget_scenarios.csv', 'creative_brief.md', 'creative_matrix.csv', 'measurement_plan.md', 'experiment_plan.csv', 'advertising_strategy_draft.md', 'execution_calendar.csv']
+          CSV_COLS = {
+              "media_plan.csv": ["channel", "role", "objective", "segment_id", "offer_id", "budget_pct", "budget_amount",
+                                 "currency", "start", "end", "landing_page", "assumption"],
+              "budget_scenarios.csv": ["scenario", "channel", "budget_amount", "metric", "metric_value", "formula", "assumption"],
+              "creative_matrix.csv": ["concept_id", "segment_id", "insight", "hook", "benefit", "proof", "cta", "format",
+                                      "asset_requirement", "test_variant"],
+              "experiment_plan.csv": ["test_id", "hypothesis", "variant_a", "variant_b", "primary_metric", "min_sample",
+                                      "duration_days", "decision_rule"],
+              "execution_calendar.csv": ["week", "start", "end", "channel", "activity", "owner", "deliverable"],
+              "sources.csv": ["id", "claim", "source_url", "access_date", "scope", "evidence_type"],
+          }
+          SOURCE_TYPES = {"document", "external", "inference", "hypothesis"}
+          errors, issues, info = [], [], {}
+
+
+          def out(status, **extra):
+              d = {"status": status, "errors": errors, "issues": issues, "info": info}
+              d.update(extra)
+              print(route_diagnostics(json.dumps(d, ensure_ascii=False, indent=2, default=str)))
+              print("PLAN: " + status)
+              print("[[PLAN_" + status + "]]")
+
+
+          def num(x):
+              # Canonical machine format: dot decimal, no percent/thousands separators.
+              text = str(x).strip()
+              if len(text) > 100 or not re.fullmatch(r"[+-]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)", text):
+                  return None
+              try:
+                  value = Decimal(text)
+              except InvalidOperation:
+                  return None
+              return value if value.is_finite() else None
+
+
+          def day(x):
+              try:
+                  text = str(x).strip()
+                  if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", text):
+                      return None
+                  return datetime.date.fromisoformat(text)
+              except Exception:
+                  return None
+
+
+          def ids_of(x):
+              return [i for i in re.split(r"[;,|/\s]+", str(x or "")) if i]
+
+
+          def read_json(n):
+              try:
+                  return json.loads((A / n).read_text(encoding="utf-8-sig"))
+              except Exception:
+                  return None
+
+
+          def read_csv(n):
+              try:
+                  with (A / n).open(encoding="utf-8-sig", newline="") as f:
+                      rd = csv.DictReader(f)
+                      cols = rd.fieldnames or []
+                      rows = [r for r in rd if any(str(v or "").strip() for v in r.values())]
+                  return cols, rows
+              except Exception:
+                  return None, None
+
+
+          def main():
+              for n in REVIEW_SET:
+                  p = A / n
+                  if not p.is_file() or p.stat().st_size == 0:
+                      errors.append("thieu hoac rong: " + n)
+              if errors:
+                  return out("ERROR")
+
+              brief, ids = read_json("campaign_brief.json"), read_json("strategy_ids.json")
+              b = brief.get("budget") if isinstance(brief, dict) else None
+              cap = num(b.get("ad_spend")) if isinstance(b, dict) else None
+              d0 = day(brief.get("start_date")) if isinstance(brief, dict) else None
+              d1 = day(brief.get("end_date")) if isinstance(brief, dict) else None
+              cur = str(b.get("currency") or "").strip() if isinstance(b, dict) else ""
+              segs, offs = set(), set()
+              if isinstance(ids, dict):
+                  segs = {s.get("segment_id") for s in (ids.get("segments") or []) if isinstance(s, dict) and s.get("segment_id")}
+                  offs = {o.get("offer_id") for o in (ids.get("offers") or []) if isinstance(o, dict) and o.get("offer_id")}
+              if cap is None or cap < 0:
+                  errors.append("brief: budget.ad_spend thieu hoac khong hop le")
+              if not d0 or not d1 or d0 > d1:
+                  errors.append("brief: start_date/end_date thieu hoac khong hop le")
+              if not cur:
+                  errors.append("brief: budget.currency thieu")
+              if not segs:
+                  errors.append("strategy_ids.json: khong co segments hop le")
+              if not offs:
+                  errors.append("strategy_ids.json: khong co offers hop le")
+              if errors:
+                  return out("ERROR")
+              info["ad_spend"] = cap
+
+              def table(name):
+                  cols, rows = read_csv(name)
+                  if cols is None:
+                      issues.append(name + ": khong doc duoc dinh dang CSV")
+                      return []
+                  miss = [c for c in CSV_COLS[name] if c not in cols]
+                  if len(cols) != len(set(cols)) or any(None in r or any(v is None for v in r.values()) for r in rows):
+                      issues.append(name + ": duplicate columns or malformed row width")
+                      return []
+                  if miss:
+                      issues.append(name + ": thieu cot " + str(miss))
+                      return []
+                  if not rows:
+                      issues.append(name + ": khong co dong du lieu")
+                      return []
+                  return rows
+
+              def need(name, rows, fields):
+                  for i, r in enumerate(rows, 2):
+                      for f in fields:
+                          if not str(r.get(f) or "").strip():
+                              issues.append("%s dong %d: thieu %s" % (name, i, f))
+
+              def in_range(name, i, r):
+                  s, e = day(r.get("start")), day(r.get("end"))
+                  if not s or not e:
+                      issues.append("%s dong %d: ngay khong hop le" % (name, i))
+                  elif s > e:
+                      issues.append("%s dong %d: start sau end" % (name, i))
+                  elif s < d0 or e > d1:
+                      issues.append("%s dong %d: ngoai thoi gian chien dich" % (name, i))
+
+              def check_ids(name, i, r, field, valid):
+                  got = ids_of(r.get(field))
+                  if not got:
+                      issues.append("%s dong %d: %s de trong" % (name, i, field))
+                  for g in got:
+                      if g not in valid:
+                          issues.append("%s dong %d: %s '%s' khong co trong strategy_ids.json" % (name, i, field, g))
+
+              # media_plan.csv
+              name = "media_plan.csv"
+              rows = table(name)
+              need(name, rows, ["channel", "role", "objective"])
+              tp = ta = Decimal(0)
+              for i, r in enumerate(rows, 2):
+                  p, a = num(r.get("budget_pct")), num(r.get("budget_amount"))
+                  if p is None or a is None or p < 0 or a < 0:
+                      issues.append("%s dong %d: budget_pct/budget_amount khong phai so huu han khong am" % (name, i))
+                  else:
+                      tp += p
+                      ta += a
+                      if abs(a - p / Decimal(100) * cap) > Decimal("0.02") * max(cap, 1):
+                          issues.append("%s dong %d: budget_amount khong khop budget_pct x ad_spend" % (name, i))
+                  if str(r.get("currency") or "").strip() != cur:
+                      issues.append("%s dong %d: currency khac brief (%s)" % (name, i, cur))
+                  in_range(name, i, r)
+                  check_ids(name, i, r, "segment_id", segs)
+                  check_ids(name, i, r, "offer_id", offs)
+              if rows:
+                  info["tong_budget_pct"], info["tong_budget_amount"] = round(tp, 2), round(ta, 2)
+                  if cap > 0:
+                      if abs(tp - 100) > Decimal("0.5"):
+                          issues.append("%s: tong budget_pct = %s, phai bang 100" % (name, round(tp, 2)))
+                      if ta > cap:
+                          issues.append("%s: tong budget_amount %s vuot ad_spend %s" % (name, round(ta, 2), cap))
+                      elif abs(ta - cap) / cap > Decimal("0.02"):
+                          issues.append("%s: tong budget_amount %s lech hon 2%% so voi ad_spend %s" % (name, round(ta, 2), cap))
+                  elif ta > 0:
+                      issues.append("%s: ad_spend = 0 nhung co budget_amount > 0" % name)
+
+              # budget_scenarios.csv
+              name = "budget_scenarios.csv"
+              rows = table(name)
+              need(name, rows, ["scenario", "channel", "metric", "assumption"])
+              allocations, metrics = {}, set()
+              for i, r in enumerate(rows, 2):
+                  a, value = num(r.get("budget_amount")), num(r.get("metric_value"))
+                  key = (str(r.get("scenario") or "").strip(), str(r.get("channel") or "").strip())
+                  metric_key = key + (str(r.get("metric") or "").strip(),)
+                  if metric_key in metrics:
+                      issues.append("%s dong %d: duplicate scenario/channel/metric" % (name, i))
+                  metrics.add(metric_key)
+                  estimate_status = str(r.get("estimate_status") or "").strip()
+                  if "estimate_status" not in r:
+                      estimate_status = "ESTIMATED"
+                  if estimate_status == "NOT_ESTIMATED":
+                      if str(r.get("metric_value") or "").strip():
+                          issues.append("%s dong %d: NOT_ESTIMATED requires an empty metric_value" % (name, i))
+                      info.setdefault("unestimated_metrics", []).append({"row": i, "scenario": key[0], "channel": key[1], "metric": metric_key[2], "reason": r.get("assumption")})
+                  elif estimate_status == "ESTIMATED":
+                      if value is None or value < 0:
+                          issues.append("%s dong %d: metric_value must be finite and nonnegative" % (name, i))
+                      if not str(r.get("formula") or "").strip():
+                          issues.append("%s dong %d: estimated metric requires formula" % (name, i))
+                  else:
+                      issues.append("%s dong %d: invalid estimate_status" % (name, i))
+                  if a is None or a < 0:
+                      issues.append("%s dong %d: budget_amount must be finite and nonnegative" % (name, i))
+                  elif key in allocations and allocations[key] != a:
+                      issues.append("%s dong %d: inconsistent budget for scenario/channel" % (name, i))
+                  else:
+                      allocations[key] = a
+              per = {}
+              for (scenario, channel), amount in allocations.items():
+                  per[scenario] = per.get(scenario, Decimal(0)) + amount
+              for sc, tot in per.items():
+                  if tot > cap:
+                      issues.append("%s: kich ban '%s' tong %s vuot ad_spend %s" % (name, sc, tot, cap))
+
+              # creative_matrix.csv
+              name = "creative_matrix.csv"
+              rows = table(name)
+              need(name, rows, ["concept_id", "hook", "cta", "proof"])
+              for i, r in enumerate(rows, 2):
+                  check_ids(name, i, r, "segment_id", segs)
+
+              # experiment_plan.csv
+              name = "experiment_plan.csv"
+              rows = table(name)
+              need(name, rows, ["test_id", "hypothesis", "primary_metric", "min_sample", "decision_rule"])
+              for i, r in enumerate(rows, 2):
+                  d = num(r.get("duration_days"))
+                  sample = num(r.get("min_sample"))
+                  if sample is None or sample <= 0 or sample != sample.to_integral_value():
+                      issues.append("%s dong %d: min_sample must be a positive integer" % (name, i))
+                  if d is None or d <= 0 or d != d.to_integral_value() or d > (d1 - d0).days + 1:
+                      issues.append("%s dong %d: duration_days phai la so duong" % (name, i))
+
+              # execution_calendar.csv
+              name = "execution_calendar.csv"
+              rows = table(name)
+              need(name, rows, ["channel", "activity"])
+              for i, r in enumerate(rows, 2):
+                  w = num(r.get("week"))
+                  if w is None or w < 1 or w != w.to_integral_value():
+                      issues.append("%s dong %d: week phai la so khong am" % (name, i))
+                  in_range(name, i, r)
+
+              # sources.csv
+              name = "sources.csv"
+              rows = table(name)
+              need(name, rows, ["id", "claim"])
+              for i, r in enumerate(rows, 2):
+                  if str(r.get("evidence_type") or "").strip() not in SOURCE_TYPES:
+                      issues.append("%s dong %d: evidence_type khong hop le" % (name, i))
+
+              if read_json("audience_segments.json") is None:
+                  issues.append("audience_segments.json: khong phai JSON hop le")
+
+              if issues:
+                  return out("ISSUES")
+
+              hashes = {n: hashlib.sha256((A / n).read_bytes()).hexdigest() for n in REVIEW_SET}
+              ver = hashlib.sha256("\n".join("%s:%s" % (n, hashes[n]) for n in sorted(hashes)).encode()).hexdigest()[:12]
+              R.mkdir(exist_ok=True)
+              snapshot = R / ver
+              snapshot.mkdir(exist_ok=True)
+              for n, digest in hashes.items():
+                  dest = snapshot / n
+                  if dest.exists() and hashlib.sha256(dest.read_bytes()).hexdigest() != digest:
+                      raise ValueError("review snapshot collision: " + n)
+                  if not dest.exists():
+                      shutil.copyfile(A / n, dest)
+                  if hashlib.sha256(dest.read_bytes()).hexdigest() != digest:
+                      raise ValueError("source changed while snapshotting: " + n)
+              (R / "review_manifest.json").write_text(json.dumps(
+                  {"plan_version": ver, "created_at": datetime.datetime.now().isoformat(timespec="seconds"), "files": hashes},
+                  ensure_ascii=False, indent=2), encoding="utf-8")
+              return out("OK", plan_version=ver)
+
+
+          try:
+              main()
+          except Exception as e:
+              errors.append("loi script: %s: %s" % (type(e).__name__, e))
+              out("ERROR")
+          ```
+    - id: Plan_Gate
+      type: python
+      config:
+        timeout_seconds: 60
+        env:
+          PYTHONIOENCODING: utf-8
+          PYTHONUTF8: '1'
+    - id: Client_Review
+      type: human
+      config:
+        description: 'Xem bản kế hoạch đã qua QA (kèm plan_version trong thông báo của Plan_Gate). Để DUYỆT: nhập đúng một dòng ''HUMAN: APPROVE'' và không viết gì thêm. Để YÊU CẦU SỬA: bắt đầu bằng ''HUMAN: REVISE'' rồi ghi nội dung cần sửa (bắt buộc có góp ý). Nhập sai cú pháp thì phiên sẽ dừng ở Blocked_Output.'
+    - id: Invalid_Review_Notice
+      type: literal
+      config:
+        role: user
+        content: |-
+          INVALID_REVIEW_INPUT: phản hồi ở bước duyệt không đúng cú pháp nên không có bản nào được bàn giao.
+          Cú pháp đúng:
+          - Duyệt: một dòng duy nhất 'HUMAN: APPROVE' (không viết thêm).
+          - Yêu cầu sửa: bắt đầu bằng 'HUMAN: REVISE' rồi ghi nội dung cần sửa (bắt buộc có góp ý).
+          Hãy chạy lại phiên hoặc nhập lại đúng cú pháp ở lần chạy sau.
+    - id: Revision_Limit
+      type: loop_counter
+      config:
+        max_iterations: 4
+        reset_on_emit: true
+        message: 'BLOCKED: đã nhận yêu cầu sửa lần thứ 4 (giới hạn là 3 lượt sửa). Cần xử lý thủ công: xem artifacts/qa_report.json, kết quả Plan_Gate và phản hồi gần nhất.'
+    - id: Build_Script
+      type: literal
+      config:
+        role: user
+        content: |
+          ```python
+          import csv, datetime, hashlib, json, math, pathlib, shutil, re
+          from decimal import Decimal, InvalidOperation
+
+          ROUTE_TOKENS = ('[[BRIEF_READY]]', '[[BRIEF_NEED_INFO]]', '[[BRIEF_INVALID]]', '[[QA_PASS]]', '[[QA_REVISE]]', '[[QA_INVALID]]', '[[PLAN_OK]]', '[[PLAN_ISSUES]]', '[[PLAN_ERROR]]', '[[BUILD_OK]]', '[[BUILD_BLOCKED]]', '[[BUILD_ERROR]]', '[[REVIEW_APPROVE]]', '[[REVIEW_REVISE]]', '[[REVIEW_INVALID]]')
+
+          def route_diagnostics(text):
+              for token in ROUTE_TOKENS:
+                  text = text.replace(token, token.replace("[[", "[ [").replace("]]", "] ]"))
+              return text.replace("[[EXEC_FAIL]]", "EXEC_FAIL (diagnostic)").replace("==CODE EXECUTION FAILED==", "CODE EXECUTION FAILED (diagnostic)")
+
+
+          A, R = pathlib.Path("artifacts"), pathlib.Path("review")
+          TMP, OUT = pathlib.Path("output_build"), pathlib.Path("output")
+          REVIEW_SET = ['campaign_brief.json', 'market_research.md', 'competitor_analysis.md', 'audience_segments.json', 'customer_journey.md', 'evidence_digest.md', 'sources.csv', 'brand_positioning.md', 'campaign_strategy.md', 'strategy_ids.json', 'media_plan.csv', 'budget_scenarios.csv', 'creative_brief.md', 'creative_matrix.csv', 'measurement_plan.md', 'experiment_plan.csv', 'advertising_strategy_draft.md', 'execution_calendar.csv']
+          EXTRA = ["qa_report.json", "handoff_notes.md"]
+          RENAME = {"advertising_strategy_draft.md": "advertising_strategy.md"}
+          SHEETS = [("Media_Plan", "media_plan.csv"), ("Budget_Scenarios", "budget_scenarios.csv"),
+                    ("Creative_Matrix", "creative_matrix.csv"), ("Experiments", "experiment_plan.csv"),
+                    ("Calendar", "execution_calendar.csv"), ("Sources", "sources.csv")]
+          NUMERIC = {"media_plan.csv": {"budget_pct", "budget_amount"},
+                     "budget_scenarios.csv": {"budget_amount", "metric_value"},
+                     "experiment_plan.csv": {"min_sample", "duration_days"}, "execution_calendar.csv": {"week"}}
+
+
+          def sha(p):
+              return hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()
+
+
+          def finish(status, problems=None, **extra):
+              d = {"status": status, "problems": problems or []}
+              d.update(extra)
+              print(route_diagnostics(json.dumps(d, ensure_ascii=False, indent=2)))
+              print("BUILD: " + status)
+              print("[[BUILD_" + status + "]]")
+
+
+          def num(x):
+              # Canonical machine format: dot decimal, no percent/thousands separators.
+              text = str(x).strip()
+              if len(text) > 100 or not re.fullmatch(r"[+-]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)", text):
+                  return None
+              try:
+                  value = Decimal(text)
+              except InvalidOperation:
+                  return None
+              return value if value.is_finite() else None
+
+
+          def typed(v):
+              x = num(v)
+              if x is None:
+                  raise ValueError("invalid canonical numeric value: " + str(v))
+              return int(x) if x == x.to_integral_value() else float(x)
+
+
+          def verify():
+              problems = []
+              try:
+                  man = json.loads((R / "review_manifest.json").read_text(encoding="utf-8-sig"))
+              except Exception as e:
+                  return None, None, ["khong doc duoc review/review_manifest.json: %s" % e]
+              files = man.get("files", {})
+              if set(files) != set(REVIEW_SET):
+                  problems.append("danh sach file trong manifest khong khop bo file duoc duyet")
+              for n in REVIEW_SET:
+                  p = A / n
+                  if not p.is_file():
+                      problems.append("thieu file: " + n)
+                  elif files.get(n) != sha(p):
+                      problems.append("file doi sau review (hash lech): " + n)
+              ver = hashlib.sha256("\n".join("%s:%s" % (n, files[n]) for n in sorted(files)).encode()).hexdigest()[:12]
+              if ver != man.get("plan_version"):
+                  problems.append("plan_version trong manifest khong khop hash cac file")
+              for n in REVIEW_SET:
+                  snapshot = R / ver / n
+                  if not snapshot.is_file() or files.get(n) != sha(snapshot):
+                      problems.append("missing or changed review snapshot: " + n)
+              try:
+                  qa = json.loads((A / "qa_report.json").read_text(encoding="utf-8-sig"))
+                  if qa.get("verdict") != "PASS":
+                      problems.append("qa_report.json: verdict khong phai PASS")
+                  if qa.get("plan_version") != man.get("plan_version"):
+                      problems.append("qa_report.json: plan_version khac manifest (QA %s, manifest %s)" %
+                                      (qa.get("plan_version"), man.get("plan_version")))
+              except Exception as e:
+                  problems.append("khong doc duoc qa_report.json: %s" % e)
+              hn = A / "handoff_notes.md"
+              if not hn.is_file() or hn.stat().st_size == 0:
+                  problems.append("thieu hoac rong: handoff_notes.md")
+              return man, files, problems
+
+
+          def build(man, files):
+              from openpyxl import Workbook
+              from pptx import Presentation
+              if TMP.exists():
+                  shutil.rmtree(TMP)
+              TMP.mkdir()
+              delivered = []
+              for n in REVIEW_SET + EXTRA:
+                  dst = RENAME.get(n, n)
+                  source = R / man["plan_version"] / n if n in REVIEW_SET else A / n
+                  shutil.copyfile(source, TMP / dst)
+                  if n in files and sha(TMP / dst) != files[n]:
+                      raise ValueError("source changed while copying: " + n)
+                  delivered.append({"name": dst, "source": n, "sha256": sha(TMP / dst)})
+
+              wb = Workbook()
+              wb.remove(wb.active)
+              for sheet, fn in SHEETS:
+                  ws = wb.create_sheet(sheet)
+                  with (TMP / fn).open(encoding="utf-8-sig", newline="") as f:
+                      rd = csv.reader(f)
+                      header = next(rd, [])
+                      ws.append(header)
+                      num_cols = {i for i, h in enumerate(header) if h in NUMERIC.get(fn, set())}
+                      for row in rd:
+                          values = dict(zip(header, row))
+                          unestimated = fn == "budget_scenarios.csv" and values.get("estimate_status", "").strip() == "NOT_ESTIMATED"
+                          if unestimated and values.get("metric_value", "").strip():
+                              raise ValueError("NOT_ESTIMATED requires an empty metric_value")
+                          ws.append([None if unestimated and header[i] == "metric_value" else typed(v) if i in num_cols else v for i, v in enumerate(row)])
+              wb.save(TMP / "Campaign_Plan.xlsx")
+
+              md = (TMP / "advertising_strategy.md").read_text(encoding="utf-8-sig")
+              parts = md.split("\n## ")
+              first = parts[0].strip().splitlines()[0].lstrip("# ").strip() if parts[0].strip() else "Chien luoc quang cao"
+              prs = Presentation()
+              s = prs.slides.add_slide(prs.slide_layouts[0])
+              s.shapes.title.text = first[:80]
+              for sec in parts[1:]:
+                  head, _, body = sec.partition("\n")
+                  s = prs.slides.add_slide(prs.slide_layouts[1])
+                  s.shapes.title.text = head.strip()[:80]
+                  lines = [l.strip("-*# ").strip() for l in body.splitlines() if l.strip()][:6]
+                  s.placeholders[1].text = "\n".join(l[:140] for l in lines)
+              prs.save(TMP / "Campaign_Presentation.pptx")
+
+              manifest = {"plan_version": man["plan_version"], "approved_sources": files,
+                          "delivered_files": delivered,
+                          "generated_files": [{"name": g, "sha256": sha(TMP / g)}
+                                              for g in ("Campaign_Plan.xlsx", "Campaign_Presentation.pptx")],
+                          "built_at": datetime.datetime.now().isoformat(timespec="seconds")}
+              (TMP / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+              if OUT.exists():
+                  shutil.rmtree(OUT)
+              TMP.rename(OUT)
+              return sorted(p.name for p in OUT.iterdir())
+
+
+          try:
+              man, files, problems = verify()
+              if problems:
+                  finish("BLOCKED", problems)
+              else:
+                  listing = build(man, files)
+                  finish("OK", [], plan_version=man["plan_version"], output_dir=str(OUT), files=listing)
+          except Exception as e:
+              if TMP.exists():
+                  shutil.rmtree(TMP, ignore_errors=True)
+              finish("ERROR", ["%s: %s" % (type(e).__name__, e)])
+          ```
+    - id: Build_Files
+      type: python
+      config:
+        timeout_seconds: 180
+        env:
+          PYTHONIOENCODING: utf-8
+          PYTHONUTF8: '1'
+    - id: Delivery
+      type: passthrough
+      config:
+        only_last_message: false
+    - id: Blocked_Output
+      type: passthrough
+      config:
+        only_last_message: false
+    - id: Strategy_QA
+      type: agent
+      config:
+        name: ag/gemini-3.8-flash
+        provider: openai
+        role: |
+          Agent Skill cho nhiệm vụ này: ad-strategy-quality-review. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
+
+          Bạn là Strategy Reviewer độc lập, giai đoạn KIỂM TRA CUỐI. Bạn nhận bản nháp kế hoạch, brief, chiến lược và kết quả của Plan_Gate (JSON có status và plan_version).
+          Kiểm tra:
+          1. Kế hoạch có đáp ứng brief và yêu cầu gốc không.
+          2. Nhận định quan trọng có nguồn hoặc được đánh dấu giả định không.
+          3. Ngân sách có cộng đúng và nằm trong giới hạn không (dựa vào Plan_Gate, không tự cộng nhẩm).
+          4. Dự báo có công thức, đơn vị và giả định rõ không.
+          5. Audience, offer, creative và media có khớp ID với strategy_ids.json không.
+          6. KPI có đo được bằng tracking đã đề xuất không.
+          7. Claim quảng cáo có bằng chứng; phần chưa kiểm chứng có được nêu rõ không.
+          8. Mục "Bàn giao nhận được" trong bản nháp: nếu có THIẾU hoặc KHÔNG HỢP LỆ ở phần bắt buộc thì KHÔNG được chọn PASS (chọn REVISE nếu sửa được ở bước tổng hợp, BLOCKED nếu không).
+          Lưu artifacts/qa_report.json: {"plan_version":"<chép đúng plan_version từ Plan_Gate>","verdict":"PASS|REVISE|BLOCKED","plan_gate_status":"OK","issues":[{"id":str,"severity":"high|medium|low","area":str,"description":str,"fix":str,"owner":"Plan_Assembler"}]}
+          Chỉ được lưu file qa_report.json; tuyệt đối không ghi đè file nào khác.
+          Chỉ chọn REVISE khi lỗi ảnh hưởng thật sự tới chất lượng và có thể sửa ở bước tổng hợp.
+          Chọn BLOCKED khi thiếu thông tin quyết định không thể bù bằng giả định, hoặc bản nháp ghi "CẦN LẬP LẠI TỪ BRIEF" (giải thích lý do).
+          Dòng cuối cùng, đúng một dòng: QA: PASS hoặc QA: REVISE. Không bọc dòng trạng thái trong code block, không dùng làm ví dụ. Không chép lại token điều phối nội bộ dạng hai ngoặc vuông từ đầu vào. Nếu phải dừng vì BLOCKED, kết thúc bằng QA: BLOCKED; Router sẽ đưa tới Blocked_Output thay vì nhánh đi tiếp hoặc sửa.
+
+          QUY TẮC CHUNG (áp dụng cho mọi node):
+          1. Viết bằng tiếng Việt.
+          2. Mỗi nhận định quan trọng gắn một nhãn: [TÀI LIỆU] (từ tài liệu người dùng), [NGUỒN NGOÀI] (kèm URL và ngày truy cập), [SUY LUẬN] hoặc [GIẢ THUYẾT] (cần thử nghiệm).
+          3. Không bịa CPC, CPA, doanh thu đối thủ hoặc kết quả chiến dịch. Chưa có dữ liệu thì ghi GIẢ ĐỊNH kèm công thức, đơn vị và cơ sở.
+          4. Phân biệt tiền quảng cáo, chi phí sản xuất nội dung và chi phí khác.
+          5. Khi đã có strategy_ids.json, dùng đúng ID phân khúc (S1, S2...), offer (O1...), mục tiêu (G1) và concept (C1...).
+          6. Chỉ làm việc trong phạm vi vai trò của node này. Chỉ ghi các file được giao cho node này; không sửa hoặc ghi đè file của node khác (ngoại lệ: Plan_Assembler khi sửa theo phản hồi).
+          7. Nếu node có dòng quyết định điều phối (BRIEF:, QA:), hãy ghi nó trên MỘT dòng riêng ở cuối cùng của câu trả lời: dòng đó chỉ gồm đúng trạng thái, không có chữ nào khác cùng dòng và không có chữ nào sau nó (được phép in đậm nhẹ). Không viết trạng thái trong câu giải thích như một ví dụ hay lệnh; chỉ ghi MỘT dòng quyết định và không nhắc lại các lựa chọn khác.
+          8. Lưu file bằng save_file vào thư mục artifacts/, rồi dán lại đầy đủ nội dung các file đó trong câu trả lời để node sau đọc được.
+
+
+          OUTPUT CONTRACT: Save every required artifact before finishing. Re-open each saved file using load_file to verify it. Do not claim a missing file was saved. Use plain canonical numbers (dot decimal; no comma separators or percent symbols) in numeric JSON/CSV fields. Preserve the original user request, including an explicit no-web restriction; in that mode use supplied documents or clearly labelled hypotheses and never invent URLs.
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params:
+          temperature: 0.1
+          protocol: chat
+        tooling:
+          - type: function
+            config:
+              tools:
+                - name: load_file
+                - name: list_directory
+                - name: save_file
+              timeout: null
+            prefix: ''
+        thinking: null
+        memories: []
+        skills:
+          enabled: true
+          allow:
+            - ad-strategy-quality-review
+            - name: ad-budget-feasibility
+            - name: ad-tracking-readiness
+            - name: ad-claims-review
+        retry:
+          enabled: true
+          max_attempts: 2
+          min_wait_seconds: 1
+          max_wait_seconds: 3
+          non_retry_exception_types:
+            - ProviderResponseError
+      description: ''
+      context_window: 0
+      log_output: true
+    - id: Performance_Analyst
+      type: agent
+      config:
+        name: cx/gpt-6-luna
+        provider: openai
+        role: |
+          Agent Skill cho nhiệm vụ này: ad-measurement-experiments. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
+
+          Bạn là Performance Analyst. Thiết kế đo lường và thử nghiệm, không dự báo kết quả theo ngân sách (phần dự báo nằm trong budget_scenarios.csv của Media).
+          Lưu artifacts/measurement_plan.md gồm: KPI chính và phụ, định nghĩa conversion, danh sách event, quy ước UTM, nguồn dữ liệu, lịch đánh giá, quy tắc dừng hoặc mở rộng. Mục tiêu KPI dạng số phải kèm cơ sở và GIẢ ĐỊNH.
+          Lưu artifacts/experiment_plan.csv với đúng cột: test_id,hypothesis,variant_a,variant_b,primary_metric,min_sample,duration_days,decision_rule
+          duration_days là số dương; min_sample và decision_rule không để trống.
+          KPI phải đo được bằng hệ thống tracking đã nêu trong brief; nếu chưa có thì đề xuất cách thiết lập.
+
+          QUY TẮC CHUNG (áp dụng cho mọi node):
+          1. Viết bằng tiếng Việt.
+          2. Mỗi nhận định quan trọng gắn một nhãn: [TÀI LIỆU] (từ tài liệu người dùng), [NGUỒN NGOÀI] (kèm URL và ngày truy cập), [SUY LUẬN] hoặc [GIẢ THUYẾT] (cần thử nghiệm).
+          3. Không bịa CPC, CPA, doanh thu đối thủ hoặc kết quả chiến dịch. Chưa có dữ liệu thì ghi GIẢ ĐỊNH kèm công thức, đơn vị và cơ sở.
+          4. Phân biệt tiền quảng cáo, chi phí sản xuất nội dung và chi phí khác.
+          5. Khi đã có strategy_ids.json, dùng đúng ID phân khúc (S1, S2...), offer (O1...), mục tiêu (G1) và concept (C1...).
+          6. Chỉ làm việc trong phạm vi vai trò của node này. Chỉ ghi các file được giao cho node này; không sửa hoặc ghi đè file của node khác (ngoại lệ: Plan_Assembler khi sửa theo phản hồi).
+          7. Nếu node có dòng quyết định điều phối (BRIEF:, QA:), hãy ghi nó trên MỘT dòng riêng ở cuối cùng của câu trả lời: dòng đó chỉ gồm đúng trạng thái, không có chữ nào khác cùng dòng và không có chữ nào sau nó (được phép in đậm nhẹ). Không viết trạng thái trong câu giải thích như một ví dụ hay lệnh; chỉ ghi MỘT dòng quyết định và không nhắc lại các lựa chọn khác.
+          8. Lưu file bằng save_file vào thư mục artifacts/, rồi dán lại đầy đủ nội dung các file đó trong câu trả lời để node sau đọc được.
+
+          QUY TẮC LƯU CSV:
+          - Khi gọi save_file để tạo hoặc cập nhật file .csv, bắt buộc truyền encoding="utf-8-sig" và mode="overwrite".
+          - Ghi toàn bộ nội dung bảng trong một lần.
+          - Giữ nguyên tiếng Việt, tên cột, thứ tự cột và dữ liệu theo schema đã yêu cầu.
+          - Không dùng append cho CSV.
+
+
+          OUTPUT CONTRACT: Save every required artifact before finishing. Re-open each saved file using load_file to verify it. Do not claim a missing file was saved. Use plain canonical numbers (dot decimal; no comma separators or percent symbols) in numeric JSON/CSV fields. Preserve the original user request, including an explicit no-web restriction; in that mode use supplied documents or clearly labelled hypotheses and never invent URLs.
+
+          In experiment_plan.csv, min_sample MUST be a positive integer only (example: 6); put the unit, sample-size limitations and explanation in decision_rule, never inside min_sample. duration_days is a positive integer within the campaign duration.
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params:
+          temperature: 0.1
+          protocol: chat
+        tooling:
+          - type: function
+            config:
+              tools:
+                - name: load_file
+                - name: list_directory
+                - name: save_file
+              timeout: null
+            prefix: ''
+        thinking: null
+        memories: []
+        skills:
+          enabled: true
+          allow:
+            - ad-measurement-experiments
+            - name: ad-data-contracts
+            - name: ad-tracking-readiness
+            - name: ad-campaign-learning
+        retry:
+          enabled: true
+          max_attempts: 2
+          min_wait_seconds: 1
+          max_wait_seconds: 3
+          non_retry_exception_types:
+            - ProviderResponseError
+      description: ''
+      context_window: 0
+      log_output: true
+    - id: Media_Planner
+      type: agent
+      config:
+        name: ag/gemini-3.8-flash
+        provider: openai
+        role: |
+          Agent Skill cho nhiệm vụ này: ad-media-planning. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
+
+          Bạn là Media Planner. Dựa trên chiến lược và brief, lập kế hoạch kênh, ngân sách và tiến độ.
+          Lưu artifacts/media_plan.csv với đúng cột: channel,role,objective,segment_id,offer_id,budget_pct,budget_amount,currency,start,end,landing_page,assumption
+          Tổng budget_pct phải bằng 100 và tổng budget_amount phải bằng budget.ad_spend trong brief; budget_amount mỗi dòng ≈ budget_pct × ad_spend / 100. Số thuần, không đơn vị. currency trùng budget.currency. Ngày YYYY-MM-DD và nằm trong khoảng start_date đến end_date của brief. segment_id và offer_id không được để trống và phải có trong strategy_ids.json. Chi phí sản xuất nội dung không tính vào media_plan.csv.
+          Lưu artifacts/budget_scenarios.csv với đúng cột: scenario,channel,budget_amount,metric,metric_value,formula,assumption,estimate_status
+          Có 3 kịch bản (thận trọng, cơ sở, tích cực); tổng budget_amount mỗi kịch bản không vượt ad_spend. estimate_status chỉ nhận ESTIMATED hoặc NOT_ESTIMATED. ESTIMATED yêu cầu metric_value là số hữu hạn không âm, có formula và assumption; không dùng CPC, CPA không có cơ sở, ghi rõ GIẢ ĐỊNH. Nếu không đủ dữ liệu dự báo, dùng NOT_ESTIMATED, để metric_value trống và giải thích phần thiếu trong assumption; formula có thể trống. Không ghi chữ hoặc số 0 thay cho giá trị chưa biết. Ngân sách budget_amount vẫn phải là số hợp lệ.
+          Trong câu trả lời, mô tả vai trò từng kênh và rủi ro chính.
+
+          QUY TẮC CHUNG (áp dụng cho mọi node):
+          1. Viết bằng tiếng Việt.
+          2. Mỗi nhận định quan trọng gắn một nhãn: [TÀI LIỆU] (từ tài liệu người dùng), [NGUỒN NGOÀI] (kèm URL và ngày truy cập), [SUY LUẬN] hoặc [GIẢ THUYẾT] (cần thử nghiệm).
+          3. Không bịa CPC, CPA, doanh thu đối thủ hoặc kết quả chiến dịch. Chưa có dữ liệu thì ghi GIẢ ĐỊNH kèm công thức, đơn vị và cơ sở.
+          4. Phân biệt tiền quảng cáo, chi phí sản xuất nội dung và chi phí khác.
+          5. Khi đã có strategy_ids.json, dùng đúng ID phân khúc (S1, S2...), offer (O1...), mục tiêu (G1) và concept (C1...).
+          6. Chỉ làm việc trong phạm vi vai trò của node này. Chỉ ghi các file được giao cho node này; không sửa hoặc ghi đè file của node khác (ngoại lệ: Plan_Assembler khi sửa theo phản hồi).
+          7. Nếu node có dòng quyết định điều phối (BRIEF:, QA:), hãy ghi nó trên MỘT dòng riêng ở cuối cùng của câu trả lời: dòng đó chỉ gồm đúng trạng thái, không có chữ nào khác cùng dòng và không có chữ nào sau nó (được phép in đậm nhẹ). Không viết trạng thái trong câu giải thích như một ví dụ hay lệnh; chỉ ghi MỘT dòng quyết định và không nhắc lại các lựa chọn khác.
+          8. Lưu file bằng save_file vào thư mục artifacts/, rồi dán lại đầy đủ nội dung các file đó trong câu trả lời để node sau đọc được.
+
+          QUY TẮC LƯU CSV:
+          - Khi gọi save_file để tạo hoặc cập nhật file .csv, bắt buộc truyền encoding="utf-8-sig" và mode="overwrite".
+          - Ghi toàn bộ nội dung bảng trong một lần.
+          - Giữ nguyên tiếng Việt, tên cột, thứ tự cột và dữ liệu theo schema đã yêu cầu.
+          - Không dùng append cho CSV.
+
+
+          OUTPUT CONTRACT: Save every required artifact before finishing. Re-open each saved file using load_file to verify it. Do not claim a missing file was saved. Use plain canonical numbers (dot decimal; no comma separators or percent symbols) in numeric JSON/CSV fields. Preserve the original user request, including an explicit no-web restriction; in that mode use supplied documents or clearly labelled hypotheses and never invent URLs.
+          For budget_scenarios.csv, budget_amount is the total allocation per (scenario, channel). Different metrics for that pair repeat the SAME allocation; never sum metric rows as separate spending. Each (scenario, channel, metric) must be unique.
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params:
+          temperature: 0.1
+          protocol: chat
+        tooling:
+          - type: function
+            config:
+              tools:
+                - name: load_file
+                - name: list_directory
+                - name: save_file
+              timeout: null
+            prefix: ''
+        thinking: null
+        memories: []
+        skills:
+          enabled: true
+          allow:
+            - ad-media-planning
+            - name: ad-data-contracts
+            - name: ad-budget-feasibility
+            - name: ad-campaign-learning
+        retry:
+          enabled: true
+          max_attempts: 2
+          min_wait_seconds: 1
+          max_wait_seconds: 3
+          non_retry_exception_types:
+            - ProviderResponseError
+      description: ''
+      context_window: 0
+      log_output: true
+    - id: Creative_Director
+      type: agent
+      config:
+        name: cx/gpt-6.1-sol
+        provider: openai
+        role: |
+          Agent Skill cho nhiệm vụ này: ad-creative-direction. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
+
+          Bạn là Creative Director. Chuyển chiến lược thành concept, thông điệp và yêu cầu sản xuất.
+          Lưu artifacts/creative_matrix.csv với đúng cột: concept_id,segment_id,insight,hook,benefit,proof,cta,format,asset_requirement,test_variant
+          concept_id, segment_id (phải có trong strategy_ids.json), hook, cta, proof không được để trống.
+          Lưu artifacts/creative_brief.md gồm: Big Idea, slogan (tối đa 3), thông điệp theo phân khúc, kịch bản video 30 giây, brief cho thiết kế hình ảnh, yêu cầu asset.
+          Mỗi claim quảng cáo phải có bằng chứng ở cột proof; phần chưa kiểm chứng ghi [GIẢ THUYẾT]. Không đưa số liệu thị trường mới.
+
+          QUY TẮC CHUNG (áp dụng cho mọi node):
+          1. Viết bằng tiếng Việt.
+          2. Mỗi nhận định quan trọng gắn một nhãn: [TÀI LIỆU] (từ tài liệu người dùng), [NGUỒN NGOÀI] (kèm URL và ngày truy cập), [SUY LUẬN] hoặc [GIẢ THUYẾT] (cần thử nghiệm).
+          3. Không bịa CPC, CPA, doanh thu đối thủ hoặc kết quả chiến dịch. Chưa có dữ liệu thì ghi GIẢ ĐỊNH kèm công thức, đơn vị và cơ sở.
+          4. Phân biệt tiền quảng cáo, chi phí sản xuất nội dung và chi phí khác.
+          5. Khi đã có strategy_ids.json, dùng đúng ID phân khúc (S1, S2...), offer (O1...), mục tiêu (G1) và concept (C1...).
+          6. Chỉ làm việc trong phạm vi vai trò của node này. Chỉ ghi các file được giao cho node này; không sửa hoặc ghi đè file của node khác (ngoại lệ: Plan_Assembler khi sửa theo phản hồi).
+          7. Nếu node có dòng quyết định điều phối (BRIEF:, QA:), hãy ghi nó trên MỘT dòng riêng ở cuối cùng của câu trả lời: dòng đó chỉ gồm đúng trạng thái, không có chữ nào khác cùng dòng và không có chữ nào sau nó (được phép in đậm nhẹ). Không viết trạng thái trong câu giải thích như một ví dụ hay lệnh; chỉ ghi MỘT dòng quyết định và không nhắc lại các lựa chọn khác.
+          8. Lưu file bằng save_file vào thư mục artifacts/, rồi dán lại đầy đủ nội dung các file đó trong câu trả lời để node sau đọc được.
+
+          QUY TẮC LƯU CSV:
+          - Khi gọi save_file để tạo hoặc cập nhật file .csv, bắt buộc truyền encoding="utf-8-sig" và mode="overwrite".
+          - Ghi toàn bộ nội dung bảng trong một lần.
+          - Giữ nguyên tiếng Việt, tên cột, thứ tự cột và dữ liệu theo schema đã yêu cầu.
+          - Không dùng append cho CSV.
+
+
+          OUTPUT CONTRACT: Save every required artifact before finishing. Re-open each saved file using load_file to verify it. Do not claim a missing file was saved. Use plain canonical numbers (dot decimal; no comma separators or percent symbols) in numeric JSON/CSV fields. Preserve the original user request, including an explicit no-web restriction; in that mode use supplied documents or clearly labelled hypotheses and never invent URLs.
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params:
+          temperature: 0.6
+          protocol: chat
+        tooling:
+          - type: function
+            config:
+              tools:
+                - name: load_file
+                - name: list_directory
+                - name: save_file
+              timeout: null
+            prefix: ''
+        thinking: null
+        memories: []
+        skills:
+          enabled: true
+          allow:
+            - ad-creative-direction
+            - name: ad-claims-review
+        retry:
+          enabled: true
+          max_attempts: 2
+          min_wait_seconds: 1
+          max_wait_seconds: 3
+          non_retry_exception_types:
+            - ProviderResponseError
+      description: ''
+      context_window: 0
+      log_output: true
+    - id: Delivery_Packager
+      type: agent
+      config:
+        name: cx/gpt-6-luna
+        provider: openai
+        role: |
+          Agent Skill cho nhiệm vụ này: ad-handoff-notes. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
+
+          Bạn viết GHI CHÚ BÀN GIAO cho bản kế hoạch đã được duyệt. Bạn không đóng gói, không sao chép, không tạo manifest (script Build_Files làm việc đó).
+          Chỉ lưu artifacts/handoff_notes.md; tuyệt đối không ghi đè hoặc sửa file nào khác.
+          Nội dung: tóm tắt kế hoạch trong 5-8 dòng; cách dùng bộ hồ sơ (đọc file nào trước, ai làm gì tiếp theo); các giả định và vấn đề còn mở lấy từ bản nháp; lưu ý rằng danh sách file đầy đủ và mã băm nằm trong manifest.json do script tạo.
+          Không liệt kê tên file nếu bạn chưa xác nhận bằng list_directory là file có tồn tại.
+          Trả về chính nội dung ghi chú.
+
+          QUY TẮC CHUNG (áp dụng cho mọi node):
+          1. Viết bằng tiếng Việt.
+          2. Mỗi nhận định quan trọng gắn một nhãn: [TÀI LIỆU] (từ tài liệu người dùng), [NGUỒN NGOÀI] (kèm URL và ngày truy cập), [SUY LUẬN] hoặc [GIẢ THUYẾT] (cần thử nghiệm).
+          3. Không bịa CPC, CPA, doanh thu đối thủ hoặc kết quả chiến dịch. Chưa có dữ liệu thì ghi GIẢ ĐỊNH kèm công thức, đơn vị và cơ sở.
+          4. Phân biệt tiền quảng cáo, chi phí sản xuất nội dung và chi phí khác.
+          5. Khi đã có strategy_ids.json, dùng đúng ID phân khúc (S1, S2...), offer (O1...), mục tiêu (G1) và concept (C1...).
+          6. Chỉ làm việc trong phạm vi vai trò của node này. Chỉ ghi các file được giao cho node này; không sửa hoặc ghi đè file của node khác (ngoại lệ: Plan_Assembler khi sửa theo phản hồi).
+          7. Nếu node có dòng quyết định điều phối (BRIEF:, QA:), hãy ghi nó trên MỘT dòng riêng ở cuối cùng của câu trả lời: dòng đó chỉ gồm đúng trạng thái, không có chữ nào khác cùng dòng và không có chữ nào sau nó (được phép in đậm nhẹ). Không viết trạng thái trong câu giải thích như một ví dụ hay lệnh; chỉ ghi MỘT dòng quyết định và không nhắc lại các lựa chọn khác.
+          8. Lưu file bằng save_file vào thư mục artifacts/, rồi dán lại đầy đủ nội dung các file đó trong câu trả lời để node sau đọc được.
+
+
+          OUTPUT CONTRACT: Save every required artifact before finishing. Re-open each saved file using load_file to verify it. Do not claim a missing file was saved. Use plain canonical numbers (dot decimal; no comma separators or percent symbols) in numeric JSON/CSV fields. Preserve the original user request, including an explicit no-web restriction; in that mode use supplied documents or clearly labelled hypotheses and never invent URLs.
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params:
+          temperature: 0.1
+          protocol: chat
+        tooling:
+          - type: function
+            config:
+              tools:
+                - name: load_file
+                - name: list_directory
+                - name: save_file
+              timeout: null
+            prefix: ''
+        thinking: null
+        memories: []
+        skills:
+          enabled: true
+          allow:
+            - ad-handoff-notes
+        retry:
+          enabled: true
+          max_attempts: 2
+          min_wait_seconds: 1
+          max_wait_seconds: 3
+          non_retry_exception_types:
+            - ProviderResponseError
+      description: ''
+      context_window: 0
+      log_output: true
+    - id: Market_Researcher
+      type: agent
+      config:
+        name: ag/gemini-3.8-flash
+        provider: openai
+        role: |
+          Agent Skill cho nhiệm vụ này: ad-market-research. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
+
+          Bạn là Market Research. Dựa trên campaign_brief.json, nghiên cứu ngành và thị trường: quy mô, xu hướng, mùa vụ, hành vi tìm kiếm và mua, thông điệp phổ biến.
+          Dùng web_search và read_webpage_content nếu có. Nếu không có công cụ tìm kiếm, nêu rõ phạm vi chỉ dựa trên tài liệu được cung cấp và đánh dấu mọi nhận định ngoài tài liệu là [GIẢ THUYẾT].
+          Cấu trúc market_research.md: Phạm vi và phương pháp; Phát hiện chính (mỗi mục có nhãn và nguồn); Cơ hội và rủi ro; Dữ liệu còn thiếu; bảng Nguồn (STT | URL | Ngày truy cập | Dữ kiện dùng).
+          Lưu artifacts/market_research.md.
+
+          QUY TẮC CHUNG (áp dụng cho mọi node):
+          1. Viết bằng tiếng Việt.
+          2. Mỗi nhận định quan trọng gắn một nhãn: [TÀI LIỆU] (từ tài liệu người dùng), [NGUỒN NGOÀI] (kèm URL và ngày truy cập), [SUY LUẬN] hoặc [GIẢ THUYẾT] (cần thử nghiệm).
+          3. Không bịa CPC, CPA, doanh thu đối thủ hoặc kết quả chiến dịch. Chưa có dữ liệu thì ghi GIẢ ĐỊNH kèm công thức, đơn vị và cơ sở.
+          4. Phân biệt tiền quảng cáo, chi phí sản xuất nội dung và chi phí khác.
+          5. Khi đã có strategy_ids.json, dùng đúng ID phân khúc (S1, S2...), offer (O1...), mục tiêu (G1) và concept (C1...).
+          6. Chỉ làm việc trong phạm vi vai trò của node này. Chỉ ghi các file được giao cho node này; không sửa hoặc ghi đè file của node khác (ngoại lệ: Plan_Assembler khi sửa theo phản hồi).
+          7. Nếu node có dòng quyết định điều phối (BRIEF:, QA:), hãy ghi nó trên MỘT dòng riêng ở cuối cùng của câu trả lời: dòng đó chỉ gồm đúng trạng thái, không có chữ nào khác cùng dòng và không có chữ nào sau nó (được phép in đậm nhẹ). Không viết trạng thái trong câu giải thích như một ví dụ hay lệnh; chỉ ghi MỘT dòng quyết định và không nhắc lại các lựa chọn khác.
+          8. Lưu file bằng save_file vào thư mục artifacts/, rồi dán lại đầy đủ nội dung các file đó trong câu trả lời để node sau đọc được.
+
+
+          OUTPUT CONTRACT: Save every required artifact before finishing. Re-open each saved file using load_file to verify it. Do not claim a missing file was saved. Use plain canonical numbers (dot decimal; no comma separators or percent symbols) in numeric JSON/CSV fields. Preserve the original user request, including an explicit no-web restriction; in that mode use supplied documents or clearly labelled hypotheses and never invent URLs.
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params:
+          temperature: 0.2
+          protocol: chat
+        tooling:
+          - type: function
+            config:
+              tools:
+                - name: load_file
+                - name: list_directory
+                - name: save_file
+              timeout: null
+            prefix: ''
+          - type: function
+            config:
+              tools:
+                - name: web_search
+                - name: read_webpage_content
+              timeout: null
+            prefix: ''
+        thinking: null
+        memories: []
+        skills:
+          enabled: true
+          allow:
+            - ad-market-research
+        retry:
+          enabled: true
+          max_attempts: 2
+          min_wait_seconds: 1
+          max_wait_seconds: 3
+          non_retry_exception_types:
+            - ProviderResponseError
+      description: ''
+      context_window: 0
+      log_output: true
+    - id: Competitor_Analyst
+      type: agent
+      config:
+        name: ag/gemini-3.8-flash
+        provider: openai
+        role: |
+          Agent Skill cho nhiệm vụ này: ad-competitor-analysis. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
+
+          Bạn là Competitor Analyst. Chọn 3-5 đối thủ trực tiếp hoặc gián tiếp của sản phẩm trong brief.
+          Với mỗi đối thủ: định vị, giá và ưu đãi, kênh quảng cáo đang dùng, thông điệp chính, điểm mạnh, điểm yếu (SWOT). Không bịa doanh thu hay chi tiêu quảng cáo.
+          Cuối bài: các KHOẢNG TRỐNG cạnh tranh có thể khai thác, và bảng Nguồn (STT | URL | Ngày truy cập | Dữ kiện dùng).
+          Dùng web_search và read_webpage_content nếu có; nếu không, đánh dấu [GIẢ THUYẾT].
+          Lưu artifacts/competitor_analysis.md.
+
+          QUY TẮC CHUNG (áp dụng cho mọi node):
+          1. Viết bằng tiếng Việt.
+          2. Mỗi nhận định quan trọng gắn một nhãn: [TÀI LIỆU] (từ tài liệu người dùng), [NGUỒN NGOÀI] (kèm URL và ngày truy cập), [SUY LUẬN] hoặc [GIẢ THUYẾT] (cần thử nghiệm).
+          3. Không bịa CPC, CPA, doanh thu đối thủ hoặc kết quả chiến dịch. Chưa có dữ liệu thì ghi GIẢ ĐỊNH kèm công thức, đơn vị và cơ sở.
+          4. Phân biệt tiền quảng cáo, chi phí sản xuất nội dung và chi phí khác.
+          5. Khi đã có strategy_ids.json, dùng đúng ID phân khúc (S1, S2...), offer (O1...), mục tiêu (G1) và concept (C1...).
+          6. Chỉ làm việc trong phạm vi vai trò của node này. Chỉ ghi các file được giao cho node này; không sửa hoặc ghi đè file của node khác (ngoại lệ: Plan_Assembler khi sửa theo phản hồi).
+          7. Nếu node có dòng quyết định điều phối (BRIEF:, QA:), hãy ghi nó trên MỘT dòng riêng ở cuối cùng của câu trả lời: dòng đó chỉ gồm đúng trạng thái, không có chữ nào khác cùng dòng và không có chữ nào sau nó (được phép in đậm nhẹ). Không viết trạng thái trong câu giải thích như một ví dụ hay lệnh; chỉ ghi MỘT dòng quyết định và không nhắc lại các lựa chọn khác.
+          8. Lưu file bằng save_file vào thư mục artifacts/, rồi dán lại đầy đủ nội dung các file đó trong câu trả lời để node sau đọc được.
+
+
+          OUTPUT CONTRACT: Save every required artifact before finishing. Re-open each saved file using load_file to verify it. Do not claim a missing file was saved. Use plain canonical numbers (dot decimal; no comma separators or percent symbols) in numeric JSON/CSV fields. Preserve the original user request, including an explicit no-web restriction; in that mode use supplied documents or clearly labelled hypotheses and never invent URLs.
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params:
+          temperature: 0.2
+          protocol: chat
+        tooling:
+          - type: function
+            config:
+              tools:
+                - name: load_file
+                - name: list_directory
+                - name: save_file
+              timeout: null
+            prefix: ''
+          - type: function
+            config:
+              tools:
+                - name: web_search
+                - name: read_webpage_content
+              timeout: null
+            prefix: ''
+        thinking: null
+        memories: []
+        skills:
+          enabled: true
+          allow:
+            - ad-competitor-analysis
+        retry:
+          enabled: true
+          max_attempts: 2
+          min_wait_seconds: 1
+          max_wait_seconds: 3
+          non_retry_exception_types:
+            - ProviderResponseError
+      description: ''
+      context_window: 0
+      log_output: true
+    - id: Customer_Insight
+      type: agent
+      config:
+        name: ag/gemini-3.8-flash
+        provider: openai
+        role: |
+          Agent Skill cho nhiệm vụ này: ad-customer-insight. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
+
+          Bạn là Customer Insight. Dựa trên brief, dữ liệu khách hàng người dùng cung cấp (nếu có) và nghiên cứu, xác định tối đa 3 phân khúc, đặt ID tạm S1, S2, S3.
+          Mỗi phân khúc: nhu cầu, vấn đề, động cơ mua, rào cản, tình huống sử dụng, thông điệp phù hợp và bằng chứng hỗ trợ. Persona chưa được xác minh phải ghi [GIẢ THUYẾT].
+          Hành trình mua theo từng phân khúc: nhận biết -> cân nhắc -> mua -> giữ chân.
+          Lưu artifacts/audience_segments.json (JSON hợp lệ, mảng phân khúc) và artifacts/customer_journey.md. Có bảng Nguồn ở cuối customer_journey.md.
+
+          QUY TẮC CHUNG (áp dụng cho mọi node):
+          1. Viết bằng tiếng Việt.
+          2. Mỗi nhận định quan trọng gắn một nhãn: [TÀI LIỆU] (từ tài liệu người dùng), [NGUỒN NGOÀI] (kèm URL và ngày truy cập), [SUY LUẬN] hoặc [GIẢ THUYẾT] (cần thử nghiệm).
+          3. Không bịa CPC, CPA, doanh thu đối thủ hoặc kết quả chiến dịch. Chưa có dữ liệu thì ghi GIẢ ĐỊNH kèm công thức, đơn vị và cơ sở.
+          4. Phân biệt tiền quảng cáo, chi phí sản xuất nội dung và chi phí khác.
+          5. Khi đã có strategy_ids.json, dùng đúng ID phân khúc (S1, S2...), offer (O1...), mục tiêu (G1) và concept (C1...).
+          6. Chỉ làm việc trong phạm vi vai trò của node này. Chỉ ghi các file được giao cho node này; không sửa hoặc ghi đè file của node khác (ngoại lệ: Plan_Assembler khi sửa theo phản hồi).
+          7. Nếu node có dòng quyết định điều phối (BRIEF:, QA:), hãy ghi nó trên MỘT dòng riêng ở cuối cùng của câu trả lời: dòng đó chỉ gồm đúng trạng thái, không có chữ nào khác cùng dòng và không có chữ nào sau nó (được phép in đậm nhẹ). Không viết trạng thái trong câu giải thích như một ví dụ hay lệnh; chỉ ghi MỘT dòng quyết định và không nhắc lại các lựa chọn khác.
+          8. Lưu file bằng save_file vào thư mục artifacts/, rồi dán lại đầy đủ nội dung các file đó trong câu trả lời để node sau đọc được.
+
+
+          OUTPUT CONTRACT: Save every required artifact before finishing. Re-open each saved file using load_file to verify it. Do not claim a missing file was saved. Use plain canonical numbers (dot decimal; no comma separators or percent symbols) in numeric JSON/CSV fields. Preserve the original user request, including an explicit no-web restriction; in that mode use supplied documents or clearly labelled hypotheses and never invent URLs.
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params:
+          temperature: 0.2
+          protocol: chat
+        tooling:
+          - type: function
+            config:
+              tools:
+                - name: load_file
+                - name: list_directory
+                - name: save_file
+              timeout: null
+            prefix: ''
+          - type: function
+            config:
+              tools:
+                - name: read_webpage_content
+                - name: web_search
+              timeout: null
+            prefix: ''
+        thinking: null
+        memories: []
+        skills:
+          enabled: true
+          allow:
+            - ad-customer-insight
+        retry:
+          enabled: true
+          max_attempts: 2
+          min_wait_seconds: 1
+          max_wait_seconds: 3
+          non_retry_exception_types:
+            - ProviderResponseError
+      description: ''
+      context_window: 0
+      log_output: true
+    - id: Evidence_Digest
+      type: agent
+      config:
+        name: cx/gpt-6.1-sol
+        provider: openai
+        role: |
+          Agent Skill cho nhiệm vụ này: ad-evidence-synthesis. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
+
+          Bạn là Strategy Reviewer ở chế độ TỔNG HỢP BẰNG CHỨNG (Evidence Digest). Bạn nhận báo cáo của Market, Competitor và Customer. Node này tổng hợp và gắn cờ, không chặn luồng.
+          Tạo EVIDENCE DIGEST gồm:
+          0) BÁO CÁO NHẬN ĐƯỢC: với Market, Competitor, Customer ghi một trạng thái: ĐÃ NHẬN | THIẾU | KHÔNG HỢP LỆ (kèm lý do ngắn). Báo cáo trống, cụt hoặc không đúng vai trò là KHÔNG HỢP LỆ.
+          A) Dữ kiện đã có nguồn (tóm tắt, giữ nguồn); với mỗi nguồn ghi rõ ĐÃ ĐỌC (có nội dung truy cập được) hay CHƯA XÁC MINH.
+          B) Giả định hoặc giả thuyết chưa có bằng chứng.
+          C) Mâu thuẫn giữa các báo cáo.
+          D) Khoảng trống dữ liệu cần lưu ý cho giai đoạn chiến lược.
+          Không viết lại báo cáo, không bịa nguồn. Nếu không có công cụ truy cập URL, ghi "chưa xác minh truy cập" thay vì khẳng định nguồn đúng.
+          Lưu artifacts/evidence_digest.md và artifacts/sources.csv với cột: id,claim,source_url,access_date,scope,evidence_type (document|external|inference|hypothesis). Nếu không có nguồn nào, ghi ít nhất một dòng evidence_type=hypothesis mô tả giới hạn dữ liệu.
+          Node này không có dòng quyết định điều phối.
+
+          QUY TẮC CHUNG (áp dụng cho mọi node):
+          1. Viết bằng tiếng Việt.
+          2. Mỗi nhận định quan trọng gắn một nhãn: [TÀI LIỆU] (từ tài liệu người dùng), [NGUỒN NGOÀI] (kèm URL và ngày truy cập), [SUY LUẬN] hoặc [GIẢ THUYẾT] (cần thử nghiệm).
+          3. Không bịa CPC, CPA, doanh thu đối thủ hoặc kết quả chiến dịch. Chưa có dữ liệu thì ghi GIẢ ĐỊNH kèm công thức, đơn vị và cơ sở.
+          4. Phân biệt tiền quảng cáo, chi phí sản xuất nội dung và chi phí khác.
+          5. Khi đã có strategy_ids.json, dùng đúng ID phân khúc (S1, S2...), offer (O1...), mục tiêu (G1) và concept (C1...).
+          6. Chỉ làm việc trong phạm vi vai trò của node này. Chỉ ghi các file được giao cho node này; không sửa hoặc ghi đè file của node khác (ngoại lệ: Plan_Assembler khi sửa theo phản hồi).
+          7. Nếu node có dòng quyết định điều phối (BRIEF:, QA:), hãy ghi nó trên MỘT dòng riêng ở cuối cùng của câu trả lời: dòng đó chỉ gồm đúng trạng thái, không có chữ nào khác cùng dòng và không có chữ nào sau nó (được phép in đậm nhẹ). Không viết trạng thái trong câu giải thích như một ví dụ hay lệnh; chỉ ghi MỘT dòng quyết định và không nhắc lại các lựa chọn khác.
+          8. Lưu file bằng save_file vào thư mục artifacts/, rồi dán lại đầy đủ nội dung các file đó trong câu trả lời để node sau đọc được.
+
+          QUY TẮC LƯU CSV:
+          - Khi gọi save_file để tạo hoặc cập nhật file .csv, bắt buộc truyền encoding="utf-8-sig" và mode="overwrite".
+          - Ghi toàn bộ nội dung bảng trong một lần.
+          - Giữ nguyên tiếng Việt, tên cột, thứ tự cột và dữ liệu theo schema đã yêu cầu.
+          - Không dùng append cho CSV.
+
+
+          OUTPUT CONTRACT: Save every required artifact before finishing. Re-open each saved file using load_file to verify it. Do not claim a missing file was saved. Use plain canonical numbers (dot decimal; no comma separators or percent symbols) in numeric JSON/CSV fields. Preserve the original user request, including an explicit no-web restriction; in that mode use supplied documents or clearly labelled hypotheses and never invent URLs.
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params:
+          temperature: 0.1
+          protocol: chat
+        tooling:
+          - type: function
+            config:
+              tools:
+                - name: load_file
+                - name: list_directory
+                - name: save_file
+              timeout: null
+            prefix: ''
+          - type: function
+            config:
+              tools:
+                - name: read_webpage_content
+              timeout: null
+            prefix: ''
+        thinking: null
+        memories: []
+        skills:
+          enabled: true
+          allow:
+            - ad-evidence-synthesis
+            - name: ad-claims-review
+        retry:
+          enabled: true
+          max_attempts: 2
+          min_wait_seconds: 1
+          max_wait_seconds: 3
+          non_retry_exception_types:
+            - ProviderResponseError
+      description: ''
+      context_window: 0
+      log_output: true
+    - id: Director_Brief
+      type: agent
+      config:
+        name: cx/gpt-6.1-sol
+        provider: openai
+        role: |
+          Agent Skill cho nhiệm vụ này: ad-brief-planning. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
+
+          Bạn là Director, giai đoạn TIẾP NHẬN. Nhận yêu cầu gốc, chuẩn hóa thành campaign_brief.json.
+          Các trường: product, benefits[], price, offer, market{region,language}, goal, start_date, end_date, budget{total,currency,ad_spend,production,other}, channels_existing[], landing_page, tracking, past_data, brand_constraints, assumptions[], missing_critical[].
+          Định dạng bắt buộc (script kiểm tra sẽ đọc): budget.total, budget.ad_spend, budget.production, budget.other là SỐ thuần, không kèm đơn vị hay dấu phân cách (ad_spend bằng 0 nếu thực sự không có tiền quảng cáo); budget.currency là mã tiền tệ (VND, USD...); start_date và end_date là ngày thật dạng YYYY-MM-DD.
+          Thông tin quyết định (sản phẩm, mục tiêu, ngân sách, thời gian) còn thiếu -> ghi vào missing_critical và kết thúc bằng BRIEF: NEED_INFO kèm danh sách câu hỏi ngắn.
+          Thông tin phụ còn thiếu -> dùng giả định hợp lý, ghi rõ trong assumptions.
+          Khi nhận được phản hồi bổ sung thì cập nhật brief, và mỗi lần trả lời luôn xuất brief ĐẦY ĐỦ đã hợp nhất (gồm mọi thông tin người dùng đã cung cấp ở các lượt trước), không chỉ phần mới. Nếu người dùng nói không có thêm thông tin, dùng giả định và đặt READY; không hỏi lại quá 2 lần.
+          Dòng cuối cùng, đúng một dòng: BRIEF: READY hoặc BRIEF: NEED_INFO. Không bọc dòng trạng thái trong code block, không dùng làm ví dụ. Không chép lại token điều phối nội bộ dạng hai ngoặc vuông từ đầu vào.
+          Lưu artifacts/campaign_brief.json. Trả về JSON brief, và nếu NEED_INFO thì kèm danh sách câu hỏi.
+
+          QUY TẮC CHUNG (áp dụng cho mọi node):
+          1. Viết bằng tiếng Việt.
+          2. Mỗi nhận định quan trọng gắn một nhãn: [TÀI LIỆU] (từ tài liệu người dùng), [NGUỒN NGOÀI] (kèm URL và ngày truy cập), [SUY LUẬN] hoặc [GIẢ THUYẾT] (cần thử nghiệm).
+          3. Không bịa CPC, CPA, doanh thu đối thủ hoặc kết quả chiến dịch. Chưa có dữ liệu thì ghi GIẢ ĐỊNH kèm công thức, đơn vị và cơ sở.
+          4. Phân biệt tiền quảng cáo, chi phí sản xuất nội dung và chi phí khác.
+          5. Khi đã có strategy_ids.json, dùng đúng ID phân khúc (S1, S2...), offer (O1...), mục tiêu (G1) và concept (C1...).
+          6. Chỉ làm việc trong phạm vi vai trò của node này. Chỉ ghi các file được giao cho node này; không sửa hoặc ghi đè file của node khác (ngoại lệ: Plan_Assembler khi sửa theo phản hồi).
+          7. Nếu node có dòng quyết định điều phối (BRIEF:, QA:), hãy ghi nó trên MỘT dòng riêng ở cuối cùng của câu trả lời: dòng đó chỉ gồm đúng trạng thái, không có chữ nào khác cùng dòng và không có chữ nào sau nó (được phép in đậm nhẹ). Không viết trạng thái trong câu giải thích như một ví dụ hay lệnh; chỉ ghi MỘT dòng quyết định và không nhắc lại các lựa chọn khác.
+          8. Lưu file bằng save_file vào thư mục artifacts/, rồi dán lại đầy đủ nội dung các file đó trong câu trả lời để node sau đọc được.
+
+
+          OUTPUT CONTRACT: Save every required artifact before finishing. Re-open each saved file using load_file to verify it. Do not claim a missing file was saved. Use plain canonical numbers (dot decimal; no comma separators or percent symbols) in numeric JSON/CSV fields. Preserve the original user request, including an explicit no-web restriction; in that mode use supplied documents or clearly labelled hypotheses and never invent URLs.
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params:
+          temperature: 0.2
+          protocol: chat
+        tooling:
+          - type: function
+            config:
+              tools:
+                - name: load_file
+                - name: list_directory
+                - name: save_file
+              timeout: null
+            prefix: ''
+        thinking: null
+        memories: []
+        skills:
+          enabled: true
+          allow:
+            - ad-brief-planning
+        retry:
+          enabled: true
+          max_attempts: 2
+          min_wait_seconds: 1
+          max_wait_seconds: 3
+          non_retry_exception_types:
+            - ProviderResponseError
+      description: ''
+      context_window: 8
+      log_output: true
+    - id: Brand_Strategist
+      type: agent
+      config:
+        name: gemini/gemini-3.1-flash-lite-preview
+        provider: openai
+        role: |
+          Agent Skill cho nhiệm vụ này: ad-brand-positioning. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
+
+          Bạn là Brand Strategist. Dựa trên Evidence Digest, báo cáo khách hàng, đối thủ và brief, xây dựng: câu định vị thương hiệu, USP, giá trị khác biệt, tính cách và giọng điệu, 3 lý do tin tưởng (reasons to believe).
+          Mỗi luận điểm chỉ rõ dựa vào dữ kiện nào, hoặc là giả thuyết. Không mâu thuẫn với brand_constraints trong brief.
+          Lưu artifacts/brand_positioning.md.
+
+          QUY TẮC CHUNG (áp dụng cho mọi node):
+          1. Viết bằng tiếng Việt.
+          2. Mỗi nhận định quan trọng gắn một nhãn: [TÀI LIỆU] (từ tài liệu người dùng), [NGUỒN NGOÀI] (kèm URL và ngày truy cập), [SUY LUẬN] hoặc [GIẢ THUYẾT] (cần thử nghiệm).
+          3. Không bịa CPC, CPA, doanh thu đối thủ hoặc kết quả chiến dịch. Chưa có dữ liệu thì ghi GIẢ ĐỊNH kèm công thức, đơn vị và cơ sở.
+          4. Phân biệt tiền quảng cáo, chi phí sản xuất nội dung và chi phí khác.
+          5. Khi đã có strategy_ids.json, dùng đúng ID phân khúc (S1, S2...), offer (O1...), mục tiêu (G1) và concept (C1...).
+          6. Chỉ làm việc trong phạm vi vai trò của node này. Chỉ ghi các file được giao cho node này; không sửa hoặc ghi đè file của node khác (ngoại lệ: Plan_Assembler khi sửa theo phản hồi).
+          7. Nếu node có dòng quyết định điều phối (BRIEF:, QA:), hãy ghi nó trên MỘT dòng riêng ở cuối cùng của câu trả lời: dòng đó chỉ gồm đúng trạng thái, không có chữ nào khác cùng dòng và không có chữ nào sau nó (được phép in đậm nhẹ). Không viết trạng thái trong câu giải thích như một ví dụ hay lệnh; chỉ ghi MỘT dòng quyết định và không nhắc lại các lựa chọn khác.
+          8. Lưu file bằng save_file vào thư mục artifacts/, rồi dán lại đầy đủ nội dung các file đó trong câu trả lời để node sau đọc được.
+
+
+          OUTPUT CONTRACT: Save every required artifact before finishing. Re-open each saved file using load_file to verify it. Do not claim a missing file was saved. Use plain canonical numbers (dot decimal; no comma separators or percent symbols) in numeric JSON/CSV fields. Preserve the original user request, including an explicit no-web restriction; in that mode use supplied documents or clearly labelled hypotheses and never invent URLs.
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params:
+          temperature: 0.3
+          protocol: chat
+        tooling:
+          - type: function
+            config:
+              tools:
+                - name: load_file
+                - name: list_directory
+                - name: save_file
+              timeout: null
+            prefix: ''
+        thinking: null
+        memories: []
+        skills:
+          enabled: true
+          allow:
+            - ad-brand-positioning
+        retry:
+          enabled: true
+          max_attempts: 2
+          min_wait_seconds: 1
+          max_wait_seconds: 3
+          non_retry_exception_types:
+            - ProviderResponseError
+      description: ''
+      context_window: 0
+      log_output: true
+    - id: Director_Strategy
+      type: agent
+      config:
+        name: gemini/gemini-3.5-flash-lite
+        provider: openai
+        role: |
+          Agent Skill cho nhiệm vụ này: ad-campaign-strategy. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
+
+          Bạn là Director, giai đoạn CHIẾN LƯỢC. Từ brief, Evidence Digest, báo cáo khách hàng và Brand Positioning, quyết định rõ:
+          quảng cáo cho ai (phân khúc ưu tiên), bán lợi ích gì, dùng offer nào, dẫn khách đi đâu (landing page, funnel), đo thành công bằng gì, và vì sao chọn cách đó.
+          Có phương án ưu tiên, phương án thay thế và các điều kiện cần kiểm chứng.
+          Lưu artifacts/campaign_strategy.md và artifacts/strategy_ids.json (JSON hợp lệ) với cấu trúc:
+          {"goal":{"goal_id":"G1","statement":str,"primary_kpi":str},"segments":[{"segment_id":"S1","name":str,"priority":number}],"offers":[{"offer_id":"O1","description":str}],"funnel":[str],"alternatives":[str],"validation_conditions":[str]}
+          Ba planner phía sau (Media, Creative, Performance) bắt buộc dùng đúng các ID này.
+
+          QUY TẮC CHUNG (áp dụng cho mọi node):
+          1. Viết bằng tiếng Việt.
+          2. Mỗi nhận định quan trọng gắn một nhãn: [TÀI LIỆU] (từ tài liệu người dùng), [NGUỒN NGOÀI] (kèm URL và ngày truy cập), [SUY LUẬN] hoặc [GIẢ THUYẾT] (cần thử nghiệm).
+          3. Không bịa CPC, CPA, doanh thu đối thủ hoặc kết quả chiến dịch. Chưa có dữ liệu thì ghi GIẢ ĐỊNH kèm công thức, đơn vị và cơ sở.
+          4. Phân biệt tiền quảng cáo, chi phí sản xuất nội dung và chi phí khác.
+          5. Khi đã có strategy_ids.json, dùng đúng ID phân khúc (S1, S2...), offer (O1...), mục tiêu (G1) và concept (C1...).
+          6. Chỉ làm việc trong phạm vi vai trò của node này. Chỉ ghi các file được giao cho node này; không sửa hoặc ghi đè file của node khác (ngoại lệ: Plan_Assembler khi sửa theo phản hồi).
+          7. Nếu node có dòng quyết định điều phối (BRIEF:, QA:), hãy ghi nó trên MỘT dòng riêng ở cuối cùng của câu trả lời: dòng đó chỉ gồm đúng trạng thái, không có chữ nào khác cùng dòng và không có chữ nào sau nó (được phép in đậm nhẹ). Không viết trạng thái trong câu giải thích như một ví dụ hay lệnh; chỉ ghi MỘT dòng quyết định và không nhắc lại các lựa chọn khác.
+          8. Lưu file bằng save_file vào thư mục artifacts/, rồi dán lại đầy đủ nội dung các file đó trong câu trả lời để node sau đọc được.
+
+
+          OUTPUT CONTRACT: Save every required artifact before finishing. Re-open each saved file using load_file to verify it. Do not claim a missing file was saved. Use plain canonical numbers (dot decimal; no comma separators or percent symbols) in numeric JSON/CSV fields. Preserve the original user request, including an explicit no-web restriction; in that mode use supplied documents or clearly labelled hypotheses and never invent URLs.
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params:
+          temperature: 0.2
+          protocol: chat
+        tooling:
+          - type: function
+            config:
+              tools:
+                - name: load_file
+                - name: list_directory
+                - name: save_file
+              timeout: null
+            prefix: ''
+        thinking: null
+        memories: []
+        skills:
+          enabled: true
+          allow:
+            - ad-campaign-strategy
+            - name: ad-budget-feasibility
+            - name: ad-campaign-learning
+        retry:
+          enabled: true
+          max_attempts: 2
+          min_wait_seconds: 1
+          max_wait_seconds: 3
+          non_retry_exception_types:
+            - ProviderResponseError
+      description: ''
+      context_window: 0
+      log_output: true
+    - id: Plan_Assembler
+      type: agent
+      config:
+        name: ag/gemini-3.8-flash
+        provider: openai
+        role: |
+          Agent Skill cho nhiệm vụ này: ad-plan-assembly-rework. Trước khi bắt đầu chuyên môn, gọi activate_skill với skill_name này. Chỉ kích hoạt một lần trong lượt chạy node; nếu kích hoạt thất bại hãy báo rõ, không khẳng định đã dùng skill.
+
+          Bạn là Director, giai đoạn TỔNG HỢP và là CHỦ của bản kế hoạch cuối. Gộp ba bàn giao (Media, Creative, Performance) với chiến lược, brief và Evidence Digest thành một kế hoạch thống nhất.
+          Phát hiện và xử lý mâu thuẫn giữa ngân sách, phân khúc, offer, creative và KPI; ghi lại các điều chỉnh đã làm.
+          Đầu bản nháp luôn có mục "Bàn giao nhận được": với Media, Creative, Performance và Evidence Digest ghi ĐÃ NHẬN | THIẾU | KHÔNG HỢP LỆ (kèm lý do). Không được che giấu hoặc tự bù phần thiếu; ghi trung thực để Strategy_QA xử lý.
+          Lưu artifacts/advertising_strategy_draft.md (mỗi phần chính là một mục "## ": Tóm tắt điều hành; Thị trường và đối thủ; Khách hàng; Định vị; Chiến lược; Kênh và ngân sách; Sáng tạo; Đo lường và thử nghiệm; Lịch triển khai; Rủi ro; Giả định và vấn đề còn mở; Phụ lục nguồn) và artifacts/execution_calendar.csv với cột: week,start,end,channel,activity,owner,deliverable (week là số; ngày YYYY-MM-DD nằm trong thời gian chiến dịch).
+
+          KHI SỬA (nhận phản hồi từ Plan_Gate, Strategy_QA hoặc người dùng):
+          - Trước khi sửa, dùng load_file đọc các file HIỆN HÀNH trong artifacts/ (media_plan.csv, budget_scenarios.csv, creative_matrix.csv, experiment_plan.csv và bản nháp). Các message cũ của Planner chỉ là tham chiếu; file hiện hành mới là nguồn đúng.
+          - Sửa đúng file và đúng cột bị nêu bằng save_file (ví dụ sai phân bổ kênh thì cập nhật media_plan.csv, không chỉ sửa phần mô tả). Sau khi sửa bảng, cập nhật các phần thuyết minh liên quan trong bản nháp.
+          - Không đổi budget.ad_spend, mục tiêu hay sản phẩm trong brief. Không bịa số để vượt kiểm tra; không sửa được thì ghi vào "Giả định và vấn đề còn mở".
+          - Ghi nhật ký thay đổi ở đầu bản nháp, gồm dòng "FILE ĐÃ ĐỔI: <danh sách tên file>" và lý do từng thay đổi.
+          - Nếu phản hồi yêu cầu đổi sản phẩm, mục tiêu hoặc ngân sách quảng cáo ở mức lớn, KHÔNG tự sửa; ghi rõ "CẦN LẬP LẠI TỪ BRIEF" ở đầu bản nháp.
+
+          QUY TẮC CHUNG (áp dụng cho mọi node):
+          1. Viết bằng tiếng Việt.
+          2. Mỗi nhận định quan trọng gắn một nhãn: [TÀI LIỆU] (từ tài liệu người dùng), [NGUỒN NGOÀI] (kèm URL và ngày truy cập), [SUY LUẬN] hoặc [GIẢ THUYẾT] (cần thử nghiệm).
+          3. Không bịa CPC, CPA, doanh thu đối thủ hoặc kết quả chiến dịch. Chưa có dữ liệu thì ghi GIẢ ĐỊNH kèm công thức, đơn vị và cơ sở.
+          4. Phân biệt tiền quảng cáo, chi phí sản xuất nội dung và chi phí khác.
+          5. Khi đã có strategy_ids.json, dùng đúng ID phân khúc (S1, S2...), offer (O1...), mục tiêu (G1) và concept (C1...).
+          6. Chỉ làm việc trong phạm vi vai trò của node này. Chỉ ghi các file được giao cho node này; không sửa hoặc ghi đè file của node khác (ngoại lệ: Plan_Assembler khi sửa theo phản hồi).
+          7. Nếu node có dòng quyết định điều phối (BRIEF:, QA:), hãy ghi nó trên MỘT dòng riêng ở cuối cùng của câu trả lời: dòng đó chỉ gồm đúng trạng thái, không có chữ nào khác cùng dòng và không có chữ nào sau nó (được phép in đậm nhẹ). Không viết trạng thái trong câu giải thích như một ví dụ hay lệnh; chỉ ghi MỘT dòng quyết định và không nhắc lại các lựa chọn khác.
+          8. Lưu file bằng save_file vào thư mục artifacts/, rồi dán lại đầy đủ nội dung các file đó trong câu trả lời để node sau đọc được.
+
+          QUY TẮC LƯU CSV:
+          - Khi gọi save_file để tạo hoặc cập nhật file .csv, bắt buộc truyền encoding="utf-8-sig" và mode="overwrite".
+          - Ghi toàn bộ nội dung bảng trong một lần.
+          - Giữ nguyên tiếng Việt, tên cột, thứ tự cột và dữ liệu theo schema đã yêu cầu.
+          - Không dùng append cho CSV.
+
+
+          OUTPUT CONTRACT: Save every required artifact before finishing. Re-open each saved file using load_file to verify it. Do not claim a missing file was saved. Use plain canonical numbers (dot decimal; no comma separators or percent symbols) in numeric JSON/CSV fields. Preserve the original user request, including an explicit no-web restriction; in that mode use supplied documents or clearly labelled hypotheses and never invent URLs.
+          When revising tables, load the current artifacts first. You may correct numeric/CSV formatting, allocation and consistency errors, then save the corrected files. Never reconstruct missing research or invent evidence. List all changed files.
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params:
+          temperature: 0.2
+          protocol: chat
+        tooling:
+          - type: function
+            config:
+              tools:
+                - name: load_file
+                - name: list_directory
+                - name: save_file
+              timeout: null
+            prefix: ''
+        thinking: null
+        memories: []
+        skills:
+          enabled: true
+          allow:
+            - ad-plan-assembly-rework
+            - name: ad-data-contracts
+        retry:
+          enabled: true
+          max_attempts: 2
+          min_wait_seconds: 1
+          max_wait_seconds: 3
+          non_retry_exception_types:
+            - ProviderResponseError
+      description: ''
+      context_window: 0
+      log_output: true
+  edges:
+    - from: Director_Brief
+      to: Brief_Router
+      condition:
+        type: keyword
+        config:
+          none:
+            - '[['
+            - '[[EXEC_FAIL]]'
+          case_sensitive: true
+      process:
+        type: function
+        config:
+          name: ad_brief_route
+    - from: Director_Brief
+      to: Blocked_Output
+      condition:
+        type: keyword
+        config:
+          any:
+            - '[['
+            - '[[EXEC_FAIL]]'
+          case_sensitive: true
+    - from: Strategy_QA
+      to: QA_Router
+      condition:
+        type: keyword
+        config:
+          none:
+            - '[['
+            - '[[EXEC_FAIL]]'
+          case_sensitive: true
+      process:
+        type: function
+        config:
+          name: ad_qa_route
+    - from: Strategy_QA
+      to: Blocked_Output
+      condition:
+        type: keyword
+        config:
+          any:
+            - '[['
+            - '[[EXEC_FAIL]]'
+          case_sensitive: true
+    - from: Campaign_Input
+      to: Campaign_Rules
+      process:
+        type: function
+        config:
+          name: ad_agency_bootstrap
+    - from: Campaign_Rules
+      to: Director_Brief
+    - from: Campaign_Input
+      to: Director_Brief
+      trigger: false
+      keep_message: true
+    - from: Brief_Router
+      to: Market_Researcher
+      condition:
+        type: keyword
+        config:
+          any:
+            - '[[BRIEF_READY]]'
+          case_sensitive: true
+      process:
+        type: function
+        config:
+          name: ad_checked_payload
+    - from: Market_Researcher
+      to: Evidence_Digest
+    - from: Brief_Router
+      to: Competitor_Analyst
+      condition:
+        type: keyword
+        config:
+          any:
+            - '[[BRIEF_READY]]'
+          case_sensitive: true
+      process:
+        type: function
+        config:
+          name: ad_checked_payload
+    - from: Competitor_Analyst
+      to: Evidence_Digest
+    - from: Brief_Router
+      to: Customer_Insight
+      condition:
+        type: keyword
+        config:
+          any:
+            - '[[BRIEF_READY]]'
+          case_sensitive: true
+      process:
+        type: function
+        config:
+          name: ad_checked_payload
+    - from: Customer_Insight
+      to: Evidence_Digest
+    - from: Brief_Router
+      to: Brief_Clarification
+      condition:
+        type: keyword
+        config:
+          any:
+            - '[[BRIEF_NEED_INFO]]'
+          case_sensitive: true
+      process:
+        type: function
+        config:
+          name: ad_checked_payload
+    - from: Brief_Router
+      to: Blocked_Output
+      process:
+        type: function
+        config:
+          name: ad_brief_fallback
+    - from: Brief_Clarification
+      to: Director_Brief
+    - from: Evidence_Digest
+      to: Brand_Strategist
+    - from: Brand_Strategist
+      to: Director_Strategy
+    - from: Director_Strategy
+      to: Media_Planner
+    - from: Media_Planner
+      to: Plan_Join
+    - from: Director_Strategy
+      to: Creative_Director
+    - from: Creative_Director
+      to: Plan_Join
+    - from: Director_Strategy
+      to: Performance_Analyst
+    - from: Performance_Analyst
+      to: Plan_Join
+    - from: Plan_Join
+      to: Plan_Assembler
+      keep_message: true
+    - from: Brief_Router
+      to: Brand_Strategist
+      trigger: false
+      keep_message: true
+      condition:
+        type: keyword
+        config:
+          any:
+            - '[[BRIEF_READY]]'
+          case_sensitive: true
+      process:
+        type: function
+        config:
+          name: ad_checked_payload
+    - from: Brief_Router
+      to: Director_Strategy
+      trigger: false
+      keep_message: true
+      condition:
+        type: keyword
+        config:
+          any:
+            - '[[BRIEF_READY]]'
+          case_sensitive: true
+      process:
+        type: function
+        config:
+          name: ad_checked_payload
+    - from: Brief_Router
+      to: Media_Planner
+      trigger: false
+      keep_message: true
+      condition:
+        type: keyword
+        config:
+          any:
+            - '[[BRIEF_READY]]'
+          case_sensitive: true
+      process:
+        type: function
+        config:
+          name: ad_checked_payload
+    - from: Brief_Router
+      to: Performance_Analyst
+      trigger: false
+      keep_message: true
+      condition:
+        type: keyword
+        config:
+          any:
+            - '[[BRIEF_READY]]'
+          case_sensitive: true
+      process:
+        type: function
+        config:
+          name: ad_checked_payload
+    - from: Brief_Router
+      to: Plan_Assembler
+      trigger: false
+      keep_message: true
+      condition:
+        type: keyword
+        config:
+          any:
+            - '[[BRIEF_READY]]'
+          case_sensitive: true
+      process:
+        type: function
+        config:
+          name: ad_checked_payload
+    - from: Brief_Router
+      to: Strategy_QA
+      trigger: false
+      keep_message: true
+      condition:
+        type: keyword
+        config:
+          any:
+            - '[[BRIEF_READY]]'
+          case_sensitive: true
+      process:
+        type: function
+        config:
+          name: ad_checked_payload
+    - from: Customer_Insight
+      to: Brand_Strategist
+      trigger: false
+      keep_message: true
+    - from: Customer_Insight
+      to: Director_Strategy
+      trigger: false
+      keep_message: true
+    - from: Customer_Insight
+      to: Creative_Director
+      trigger: false
+      keep_message: true
+    - from: Competitor_Analyst
+      to: Brand_Strategist
+      trigger: false
+      keep_message: true
+    - from: Evidence_Digest
+      to: Director_Strategy
+      trigger: false
+      keep_message: true
+    - from: Evidence_Digest
+      to: Creative_Director
+      trigger: false
+      keep_message: true
+    - from: Evidence_Digest
+      to: Plan_Assembler
+      trigger: false
+      keep_message: true
+    - from: Brand_Strategist
+      to: Creative_Director
+      trigger: false
+      keep_message: true
+    - from: Brand_Strategist
+      to: Plan_Assembler
+      trigger: false
+      keep_message: true
+    - from: Director_Strategy
+      to: Plan_Assembler
+      trigger: false
+      keep_message: true
+    - from: Director_Strategy
+      to: Strategy_QA
+      trigger: false
+      keep_message: true
+    - from: Campaign_Rules
+      to: Strategy_QA
+      trigger: false
+      keep_message: true
+    - from: Plan_Assembler
+      to: Plan_Gate_Script
+    - from: Plan_Gate_Script
+      to: Plan_Gate
+    - from: Plan_Gate
+      to: Strategy_QA
+      condition:
+        type: keyword
+        config:
+          any:
+            - '[[PLAN_OK]]'
+          none:
+            - '[[EXEC_FAIL]]'
+          case_sensitive: true
+      process:
+        type: function
+        config:
+          name: ad_checked_payload
+    - from: Plan_Gate
+      to: Plan_Assembler
+      condition:
+        type: keyword
+        config:
+          any:
+            - '[[PLAN_ISSUES]]'
+          none:
+            - '[[EXEC_FAIL]]'
+          case_sensitive: true
+      process:
+        type: function
+        config:
+          name: ad_checked_payload
+    - from: Plan_Gate
+      to: Revision_Limit
+      condition:
+        type: keyword
+        config:
+          any:
+            - '[[PLAN_ISSUES]]'
+          none:
+            - '[[EXEC_FAIL]]'
+          case_sensitive: true
+      process:
+        type: function
+        config:
+          name: ad_checked_payload
+    - from: Plan_Gate
+      to: Blocked_Output
+      process:
+        type: function
+        config:
+          name: ad_plan_fallback
+    - from: Plan_Gate
+      to: Client_Review
+      condition:
+        type: keyword
+        config:
+          any:
+            - '[[PLAN_OK]]'
+          none:
+            - '[[EXEC_FAIL]]'
+          case_sensitive: true
+      trigger: false
+      process:
+        type: function
+        config:
+          name: ad_checked_payload
+    - from: Plan_Assembler
+      to: Strategy_QA
+      trigger: false
+      clear_context: true
+    - from: QA_Router
+      to: Plan_Assembler
+      condition:
+        type: keyword
+        config:
+          any:
+            - '[[QA_REVISE]]'
+          case_sensitive: true
+      process:
+        type: function
+        config:
+          name: ad_checked_payload
+    - from: QA_Router
+      to: Revision_Limit
+      condition:
+        type: keyword
+        config:
+          any:
+            - '[[QA_REVISE]]'
+          case_sensitive: true
+      process:
+        type: function
+        config:
+          name: ad_checked_payload
+    - from: QA_Router
+      to: Client_Review
+      condition:
+        type: keyword
+        config:
+          any:
+            - '[[QA_PASS]]'
+          case_sensitive: true
+      process:
+        type: function
+        config:
+          name: ad_checked_payload
+    - from: QA_Router
+      to: Blocked_Output
+      process:
+        type: function
+        config:
+          name: ad_qa_fallback
+    - from: Plan_Assembler
+      to: Client_Review
+      trigger: false
+      clear_context: true
+    - from: Client_Review
+      to: Review_Router
+      condition:
+        type: keyword
+        config:
+          none:
+            - '[['
+            - '[[EXEC_FAIL]]'
+          case_sensitive: true
+      process:
+        type: function
+        config:
+          name: ad_review_route
+    - from: Client_Review
+      to: Invalid_Review_Notice
+      condition:
+        type: keyword
+        config:
+          any:
+            - '[['
+            - '[[EXEC_FAIL]]'
+          case_sensitive: true
+    - from: Review_Router
+      to: Plan_Assembler
+      condition:
+        type: keyword
+        config:
+          any:
+            - '[[REVIEW_REVISE]]'
+          case_sensitive: true
+      process:
+        type: function
+        config:
+          name: ad_checked_payload
+    - from: Review_Router
+      to: Revision_Limit
+      condition:
+        type: keyword
+        config:
+          any:
+            - '[[REVIEW_REVISE]]'
+          case_sensitive: true
+      process:
+        type: function
+        config:
+          name: ad_checked_payload
+    - from: Review_Router
+      to: Delivery_Packager
+      condition:
+        type: keyword
+        config:
+          any:
+            - '[[REVIEW_APPROVE]]'
+          case_sensitive: true
+      process:
+        type: function
+        config:
+          name: ad_checked_payload
+    - from: Review_Router
+      to: Invalid_Review_Notice
+      process:
+        type: function
+        config:
+          name: ad_review_fallback
+    - from: Invalid_Review_Notice
+      to: Blocked_Output
+    - from: Revision_Limit
+      to: Plan_Assembler
+    - from: Revision_Limit
+      to: Blocked_Output
+    - from: Plan_Assembler
+      to: Delivery_Packager
+      trigger: false
+      clear_context: true
+    - from: QA_Router
+      to: Delivery_Packager
+      condition:
+        type: keyword
+        config:
+          any:
+            - '[[QA_PASS]]'
+          case_sensitive: true
+      trigger: false
+      process:
+        type: function
+        config:
+          name: ad_checked_payload
+    - from: Delivery_Packager
+      to: Build_Script
+    - from: Build_Script
+      to: Build_Files
+    - from: Build_Files
+      to: Delivery
+      condition:
+        type: keyword
+        config:
+          any:
+            - '[[BUILD_OK]]'
+          none:
+            - '[[EXEC_FAIL]]'
+          case_sensitive: true
+      process:
+        type: function
+        config:
+          name: ad_checked_payload
+    - from: Build_Files
+      to: Blocked_Output
+      process:
+        type: function
+        config:
+          name: ad_build_fallback
+vars: {}

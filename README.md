@@ -1,3 +1,18 @@
+# AI Marketing Agency — Advertising Strategy Workflow
+
+This project extends ChatDev 2.0 with a 13-agent advertising strategy team: brief clarification, research, evidence synthesis, strategy, media/creative/measurement planning, validation, human approval, and file delivery.
+
+- [Installation and operating guide (Vietnamese)](ad_agency_v2_guide.md)
+- [Main advertising workflow](yaml_instance/ad_agency_v2.yaml)
+- [Automatic evaluation workflow](yaml_instance/ad_agency_v2_auto.yaml)
+- [Advertising skills](docs/ad_agency_skills.md)
+
+Configure a local `.env` from `.env.example`, install dependencies, and follow the guide before launching. API keys, campaign session data, and generated recovery workflows are kept out of version control. The workflow creates planning documents; it does not launch paid advertising campaigns.
+
+The original ChatDev documentation and Apache-2.0 license are retained below.
+
+---
+
 # ChatDev 2.0 - DevAll
 
 <p align="center">

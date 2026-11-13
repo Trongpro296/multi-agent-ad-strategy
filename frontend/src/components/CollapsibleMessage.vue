@@ -43,7 +43,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 
 const props = defineProps({
   htmlContent: {
@@ -68,6 +68,7 @@ const contentRef = ref(null)
 const isCollapsed = ref(!props.defaultExpanded)
 const contentHeight = ref(0)
 const copyStatus = ref('idle') // idle, copied
+let contentObserver
 
 const shouldShowToggle = computed(() => {
   return contentHeight.value > props.maxHeight
@@ -107,7 +108,12 @@ const copyToClipboard = async () => {
 
 onMounted(() => {
   checkHeight()
+  // Re-measure on panel resize, Graph/Chat switches and image loading.
+  contentObserver = new ResizeObserver(checkHeight)
+  contentObserver.observe(contentRef.value.firstElementChild)
 })
+
+onUnmounted(() => contentObserver?.disconnect())
 
 watch(() => props.htmlContent, () => {
   checkHeight()
@@ -118,6 +124,9 @@ watch(() => props.htmlContent, () => {
 .collapsible-message {
   position: relative;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 10px 0;
 }
 
@@ -154,6 +163,8 @@ watch(() => props.htmlContent, () => {
 
 
 .content-wrapper {
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   transition: max-height 0.3s ease;
 }
@@ -164,7 +175,7 @@ watch(() => props.htmlContent, () => {
 }
 
 .message-text {
-  word-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 
 .toggle-wrapper {
@@ -197,7 +208,9 @@ watch(() => props.htmlContent, () => {
   font-family: -apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif,Apple Color Emoji,Segoe UI Emoji;
   font-size: 14px;
   line-height: 1.6;
-  word-wrap: break-word;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .markdown-body :deep(blockquote), 
@@ -232,7 +245,31 @@ watch(() => props.htmlContent, () => {
     line-height: 1.25;
 }
 
+.markdown-body :deep(h1) { font-size: 1.5em; }
+.markdown-body :deep(h2) { font-size: 1.3em; }
+.markdown-body :deep(h3) { font-size: 1.15em; }
+.markdown-body :deep(h4),
+.markdown-body :deep(h5),
+.markdown-body :deep(h6) { font-size: 1em; }
+
+.markdown-body :deep(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+}
+
+.markdown-body :deep(th),
+.markdown-body :deep(td) {
+    padding: 6px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    min-width: 100px;
+}
+
 .markdown-body :deep(pre) {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
     background-color: rgba(0, 0, 0, 0.3);
     border-radius: 6px;
     padding: 12px;
@@ -255,6 +292,7 @@ watch(() => props.htmlContent, () => {
     font-size: 100%;
     word-break: normal;
     white-space: pre;
+    overflow-wrap: normal;
     background: transparent;
     border: 0;
 }
@@ -276,8 +314,8 @@ watch(() => props.htmlContent, () => {
 
 .markdown-body :deep(img) {
     max-width: 100%;
+    height: auto;
     box-sizing: border-box;
     background-color: transparent;
 }
 </style>
-/style>
