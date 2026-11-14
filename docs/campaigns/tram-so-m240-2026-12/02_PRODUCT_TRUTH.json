@@ -1,0 +1,47 @@
+{
+  "document_version": "1.0",
+  "checked_date": "2026-11-15",
+  "product_scope": "M240 Silent bản tiêu dùng, không trộn M240 for Business hoặc sản phẩm khác.",
+  "verified_product_facts": [
+    {
+      "id": "F01",
+      "claim": "Tên sản phẩm: Logitech M240 Silent.",
+      "source_url": "https://www.logitech.com/vi-vn/shop/p/m240-silent-bluetooth-mouse",
+      "location": "Tên sản phẩm",
+      "allowed_public_copy": "Logitech M240 Silent"
+    },
+    {
+      "id": "F02",
+      "claim": "Có kết nối Bluetooth; không cần dùng cổng USB để kết nối theo cách này.",
+      "source_url": "https://www.logitech.com/vi-vn/shop/p/m240-silent-bluetooth-mouse",
+      "location": "Bluetooth nhanh, dễ dàng",
+      "allowed_public_copy": "Kết nối Bluetooth trên máy tương thích, không chiếm cổng USB."
+    },
+    {
+      "id": "F03",
+      "claim": "Sử dụng một pin AA; không phải chuột sạc lại.",
+      "source_url": "https://support.logi.com/hc/en-ca/articles/11654238591767-Specification-M240",
+      "location": "Battery Details; Battery Life (not rechargeable)",
+      "allowed_public_copy": "Dùng một pin AA."
+    },
+    {
+      "id": "F04",
+      "claim": "Hãng giới thiệu tính năng nhấp yên tĩnh.",
+      "source_url": "https://www.logitech.com/vi-vn/shop/p/m240-silent-bluetooth-mouse",
+      "location": "Giới thiệu sản phẩm; Ít ồn hơn, tập trung hơn",
+      "allowed_public_copy": "Nhấp chuột yên tĩnh."
+    }
+  ],
+  "excluded_from_public_claims": [
+    "Tỷ lệ giảm tiếng ồn định lượng, thời lượng pin định lượng, DPI, polling rate và phiên bản OS cụ thể: không dùng trong chiến dịch này để tránh bỏ điều kiện hoặc trộn nguồn.",
+    "Không ghi im lặng tuyệt đối, không phát ra âm thanh, chữa mỏi cổ tay, gaming chuyên nghiệp, kết nối mọi thiết bị, chuyển nhanh đa thiết bị.",
+    "Không ghi sạc USB-C, pin sạc, kèm đầu thu USB, hoặc phủ định mọi khả năng dùng receiver. Chiến dịch chỉ nói kết nối Bluetooth.",
+    "Không gọi Trạm Số là đại lý ủy quyền, gian hàng chính thức hoặc đối tác Logitech khi chưa có giấy tờ.",
+    "Không dùng ảnh hãng hoặc ảnh khách hàng nếu chưa có quyền phù hợp; không gọi ảnh AI là ảnh chụp sản phẩm thật."
+  ],
+  "scope_limits": [
+    "Thông số hãng không chứng minh nguồn hàng của shop, hàng tồn, tính xác thực của lô hàng hoặc cam kết bảo hành của shop.",
+    "Giá 449.000 VNĐ là quyết định giá của chủ dự án, không phải giá niêm yết hãng hoặc benchmark được nguồn trên xác nhận.",
+    "Tên Trạm Số là tên truyền thông được chọn, không phải chứng nhận đăng ký thương hiệu."
+  ]
+}

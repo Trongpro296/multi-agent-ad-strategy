@@ -1,0 +1,110 @@
+KHÔI PHỤC PHIÊN BAN CÔNG XANH — KHÔNG NGHIÊN CỨU/TẠO LẠI TỪ ĐẦU.
+Đầu ra nguồn đã có trong snapshot. Brief dưới đây là bản đã chuẩn hóa của phiên trước, không phải lịch sử nguyên văn prompt. Giữ nguyên dữ kiện, ràng buộc, ngân sách và thời gian trong brief và các file đã phục hồi. Các thông tin đề xuất vẫn là đề xuất, không nâng thành dữ kiện đã xác minh.
+Không chạy lại Agent nghiên cứu, không thay model, không tự đăng bài/chạy quảng cáo. Giữ 6 bài đăng và 2 kịch bản video trong creative_brief.md theo yêu cầu dự án; không tạo video. Banner theo cấu hình hiện hành và chỉ sau Human duyệt; không dùng ảnh AI làm bằng chứng công việc thực tế.
+Plan_Assembler: ngay lượt đầu của phiên khôi phục, đọc các artifact đã phục hồi và sửa ba issue bên dưới; không bỏ lượt đầu để tạo lại một bản kế hoạch tương tự. Đồng bộ tất cả file liên quan trong quyền sửa; nếu nguồn ngoài quyền không thể sửa thì ghi giới hạn rõ ràng. Khi chỉnh thiết kế test, không khẳng định kết quả từ mẫu nhỏ và không tự tăng tổng ngân sách. Phân biệt thời hạn phản hồi ban đầu với thời hạn xác nhận phạm vi.
+QA của phiên nguồn đã chọn REVISE, chưa phê duyệt. Các severity chỉ được chuyển nhãn CRITICAL→high, MAJOR→medium, MINOR→low trong danh sách hướng dẫn này; mô tả/fix/owner không thay đổi. Không dùng lại qa_report.json cũ. Sau sửa, Gate tạo snapshot/plan_version mới và QA phải đánh giá lại đầy đủ. Dừng tại Client_Review chờ tôi duyệt; không tự tạo lệnh duyệt.
+BRIEF NGUỒN:
+{
+  "product": "Dịch vụ chăm sóc cây cảnh tại nhà 'Ban Công Xanh'",
+  "benefits": [
+    "Quan sát, kiểm tra sức khỏe và tình trạng sinh trưởng cơ bản của cây",
+    "Vệ sinh bề mặt lá, lau bụi giúp cây quang hợp tốt hơn",
+    "Cắt tỉa cành khô, lá úa, tạo dáng gọn gàng cho cây",
+    "Kiểm tra độ ẩm đất, rễ bề mặt và độ thông thoát nước đáy chậu",
+    "Tư vấn, hướng dẫn trực tiếp gia chủ lịch tưới nước và vị trí hứng sáng tối ưu trong căn hộ"
+  ],
+  "price": "349.000 VNĐ/buổi (giá đề xuất thử nghiệm, chưa duyệt công bố chính thức)",
+  "offer": "Gói O1 - Buổi kiểm tra và chăm sóc cơ bản cây ban công: thời lượng tối đa 90 phút, áp dụng tối đa 8 chậu cây nhỏ/vừa tại căn hộ, yêu cầu gửi ảnh xác nhận phạm vi trước khi chốt lịch",
+  "market": {
+    "region": "Cụm căn hộ/chung cư trong bán kính 5 km quanh khu vực Trung Hòa - Nhân Chính, Cầu Giấy / Thanh Xuân, Hà Nội",
+    "language": "vi"
+  },
+  "goal": "G1: Tạo hội thoại tư vấn đủ điều kiện qua Facebook Messenger (khách trong vùng phục vụ, gửi ảnh & số lượng cây, nhu cầu phù hợp phạm vi, có thời gian dự kiến và đồng ý trao đổi)",
+  "start_date": "2026-12-01",
+  "end_date": "2026-12-14",
+  "budget": {
+    "total": 4000000,
+    "currency": "VND",
+    "ad_spend": 2800000,
+    "production": 1200000,
+    "other": 0
+  },
+  "channels_existing": [],
+  "landing_page": null,
+  "tracking": "Sổ theo dõi hội thoại thủ công (Google Sheet / Excel) ghi nhận phễu: Inbox mới -> Inbox đủ điều kiện -> Báo giá gửi -> Lịch xác nhận -> Buổi hoàn thành -> Doanh thu/chi phí thực tế. Chống trùng bằng User ID/SĐT.",
+  "past_data": null,
+  "brand_constraints": [
+    "Không cam kết chữa khỏi bệnh, cứu sống cây héo/chết hoặc hứa hẹn cây hồi phục 100%",
+    "Không chẩn đoán bệnh học chuyên sâu hoặc xử lý hóa chất bảo vệ thực vật độc hại",
+    "Không nhận làm ngoài lan can, leo cao nguy hiểm, bê vác cây đại cảnh quá khổ hoặc thi công cải tạo phần cứng ban công",
+    "Không dùng các từ ngữ tuyệt đối hóa chưa kiểm chứng: 'chuyên gia', 'số 1', 'rẻ nhất', 'cứu mọi loại cây'",
+    "Không công bố mức giá 349.000 VNĐ lên banner/ấn phẩm quảng cáo diện rộng (chỉ báo giá trong Messenger sau khi xem ảnh phạm vi)",
+    "Không dùng ảnh do AI tạo làm bằng chứng kết quả thực tế (before/after), minh chứng khách hàng hay công việc đã làm",
+    "Bảo mật tuyệt đối hình ảnh không gian sống, số điện thoại và địa chỉ căn hộ của khách hàng",
+    "Mọi tài sản truyền thông và nội dung đều ở trạng thái DRAFT cho đến khi được phê duyệt chính thức"
+  ],
+  "assumptions": [
+    "Giả định giá 349.000 VNĐ/buổi đủ bù đắp chi phí di chuyển, dụng cụ tiêu hao và thù lao thực hiện 90 phút trong bán kính 5km",
+    "Giả định cư dân sống tại các chung cư khu vực Trung Hòa - Nhân Chính có tỷ lệ sở hữu cây xanh ban công và quan tâm tới giải pháp bảo dưỡng cơ bản",
+    "Giả định Facebook Messenger là kênh tương tác trực quan và thuận tiện nhất để khách hàng gửi ảnh hiện trạng chậu cây",
+    "Giả định các chỉ số hiệu quả (CPL, CPA, Conversion Rate) chưa có dữ liệu cơ sở (baseline = null / NOT_ESTIMATED) và sẽ được đo lường thực tế trong 14 ngày thử nghiệm"
+  ],
+  "missing_critical": []
+}
+CÁC ISSUE CẦN SỬA:
+[
+  {
+    "id": "ISSUE-001",
+    "severity": "high",
+    "area": "CROSS_FILE_CONSISTENCY / EXPERIMENTS",
+    "description": "Mâu thuẫn phân bổ ngân sách và lịch chạy giữa media_plan.csv và experiment_plan.csv: media_plan.csv phân bổ 100% ngân sách tuần 1 (01-07/12, 1.680.000 VNĐ) cho S1/C1 và tuần 2 (08-14/12, 1.120.000 VNĐ) cho S2/C2. Trong khi đó, experiment_plan.csv yêu cầu thử nghiệm A/B T1 chạy đồng thời cả hai biến thể C1/S1 (Variant A) và C2/S2 (Variant B) trong cùng khoảng thời gian 01-07/12/2026. Với cấu hình của media_plan.csv, Variant B hoàn toàn không có ngân sách quảng cáo trong tuần 1, làm vô hiệu hóa thiết kế thử nghiệm T1.",
+    "fix": "Cập nhật media_plan.csv để phân bổ ngân sách đồng thời cho cả S1 và S2 trong tuần 1 (01-07/12/2026) phục vụ thử nghiệm T1 (ví dụ chia đều hoặc phân bổ theo tỷ lệ 50/50 hoặc 60/40 trong tuần 1 cho hai biến thể test, tuần 2 dành ngân sách cho biến thể tiềm năng hoặc tối ưu hóa theo kết quả), đồng thời cập nhật dòng T1 trong execution_calendar.csv và phần Kênh/Ngân sách trong advertising_strategy_draft.md cho nhất quán.",
+    "owner": "Plan_Assembler",
+    "evidence_refs": [
+      {
+        "file": "media_plan.csv",
+        "location": "Dòng 1, 2 (cột start, end, budget_pct, budget_amount)"
+      },
+      {
+        "file": "experiment_plan.csv",
+        "location": "Dòng 2 (T1: variant_a, variant_b, start, end)"
+      }
+    ]
+  },
+  {
+    "id": "ISSUE-002",
+    "severity": "medium",
+    "area": "CROSS_FILE_CONSISTENCY",
+    "description": "creative_matrix.csv và creative_brief.md chưa đồng bộ trạng thái với experiment_plan.csv: Trong creative_matrix.csv, cột test_variant vẫn ghi 'T1: C1; mã variant chờ experiment_plan.csv' và 'chờ hợp đồng Performance'; creative_brief.md mục 'Dependency thử nghiệm' ghi 'Chưa có experiment_plan.csv, measurement_plan.md... chưa khóa mã variant'. Trong khi đó, experiment_plan.csv đã hoàn tất và ban hành mã Variant A (C1/S1), Variant B (C2/S2) cho T1.",
+    "fix": "Cập nhật creative_matrix.csv (cột test_variant gán đúng Variant A cho C1 và Variant B cho C2 theo experiment_plan.csv) và cập nhật ghi chú dependency trong creative_brief.md để xác nhận đã đồng bộ với experiment_plan.csv.",
+    "owner": "Plan_Assembler",
+    "evidence_refs": [
+      {
+        "file": "creative_matrix.csv",
+        "location": "Cột test_variant, dòng C1 (B1, V1, P1) và C2 (B2, V2, P4)"
+      },
+      {
+        "file": "creative_brief.md",
+        "location": "Mục 'Dependency thử nghiệm'"
+      }
+    ]
+  },
+  {
+    "id": "ISSUE-003",
+    "severity": "low",
+    "area": "CROSS_FILE_CONSISTENCY",
+    "description": "Mâu thuẫn mốc SLA phản hồi khách hàng giữa campaign_strategy.md và measurement_plan.md: campaign_strategy.md đề xuất SLA phản hồi trong 60 phút trong giờ trực, trong khi measurement_plan.md và advertising_strategy_draft.md đề xuất mốc vận hành phản hồi trong 1 ngày làm việc.",
+    "fix": "Chuẩn hóa mốc thời gian phản hồi kỳ vọng trong advertising_strategy_draft.md, campaign_strategy.md hoặc ghi chú rõ: mục tiêu phản hồi ban đầu trong 60 phút giờ hành chính và thời hạn chốt xác nhận phạm vi tối đa 1 ngày làm việc để tránh hiểu nhầm giữa đo lường và vận hành.",
+    "owner": "Plan_Assembler",
+    "evidence_refs": [
+      {
+        "file": "campaign_strategy.md",
+        "location": "Mục 3 (Điểm đến và vận hành)"
+      },
+      {
+        "file": "measurement_plan.md",
+        "location": "Mục 'Mục tiêu và chỉ số' (đoạn 4)"
+      }
+    ]
+  }
+]

@@ -1,0 +1,46 @@
+Triển khai dự án NHỊP Sneaker — khởi động kênh bán giày sneaker online tại TP.HCM.
+
+Tôi là chủ dự án và ủy quyền sử dụng các thông số kinh doanh dưới đây làm quyết định triển khai đã chốt. Không hỏi lại tên thương hiệu, giá, ngân sách, thời gian hoặc số lượng đầu ra. Các quyết định này không phải bằng chứng tôi đã có tồn kho, nhân sự hay lịch sử bán hàng; không tự tạo các dữ liệu đó.
+
+BRIEF ĐÃ CHỐT
+- Tên truyền thông: NHỊP Sneaker. Không tự tuyên bố đăng ký nhãn hiệu, có cửa hàng vật lý hoặc đại lý của hãng khác.
+- Sản phẩm trọng tâm N01: sneaker cổ thấp phong cách tối giản để phối đồ hằng ngày. Danh mục lựa chọn hai màu trắng/đen, size 36–43. Không khẳng định tồn đủ size; phải kiểm nguồn hàng trước nhận tiền.
+- Offer O1: một đôi N01, giá bán 499.000 VNĐ/đôi. Đây là giá tôi cho phép công bố, không phải giá giả định cần hỏi duyệt lại. Không giảm giá, không giá gạch bỏ, không tặng quà. Phí giao hàng báo riêng trước xác nhận đơn.
+- Chưa có tài liệu vật liệu, trọng lượng hoặc công nghệ. Không tự ghi da thật, chống trượt, chống nước, giảm chấn hay cam kết sức khỏe.
+- Phạm vi chiến dịch: khách ở TP.HCM; bán online, nhận tư vấn qua Messenger. Chưa cung cấp Page URL, số điện thoại hoặc địa chỉ công khai: dùng CTA “Nhắn tin để chọn mẫu và size”, không bịa liên kết hoặc số liên hệ.
+- Lựa chọn nhắm mục tiêu chính: người đi làm 22–30 tuổi tại TP.HCM, quan tâm sneaker tối giản để phối đồ hằng ngày. Đây là lựa chọn chiến dịch, không phải khảo sát đã có. Người mua quà là nhóm phụ, chưa tách ngân sách riêng.
+- Giọng thương hiệu: rõ ràng, thân thiện, tối giản. Thông điệp trọng tâm: “Chọn đôi giày hợp nhịp mỗi ngày”. Không dùng “tốt nhất”, “rẻ nhất”, feedback giả hoặc khan hiếm giả.
+
+THỜI GIAN VÀ NGÂN SÁCH
+- 01/12/2026 đến hết 14/12/2026: 14 ngày.
+- Tổng: 7.000.000 VNĐ. Ad spend: 5.600.000 VNĐ; sản xuất: 1.400.000 VNĐ; other: 0.
+- Trần quảng cáo: 400.000 VNĐ/ngày, không vượt tổng. Không tính lẫn ngân sách sản xuất vào ad spend.
+- Giá vốn, đóng gói và giao hàng chưa có số liệu, không giả bằng 0. Không suy ra lợi nhuận hoặc ROAS từ giá bán.
+- Kênh chính Facebook Feed và Stories, cùng đích Messenger. Không thêm TikTok, website hoặc chiến dịch nhiều kênh làm phân tán ngân sách.
+
+MỤC TIÊU VÀ ĐO LƯỜNG
+- G1: hội thoại Messenger đủ điều kiện. Một người ở TP.HCM cung cấp mẫu/nhu cầu, màu, size hoặc số đo và đồng ý trao đổi giá/giao hàng. Một người tính một lead chính trong 14 ngày; loại spam, tuyển dụng, chào bán.
+- Theo dõi riêng: hội thoại mới, qualified lead, đơn xác nhận, đơn giao thành công, tiền thực thu, hủy/hoàn và chi phí thực tế. Không cộng các bước thành một chỉ số khách hàng.
+- Chưa có lịch sử quảng cáo, đơn, khách hoặc doanh thu. Không điền số liệu quá khứ. CPL/CPA/ROAS và dự báo chưa có căn cứ phải là NOT_ESTIMATED theo schema; không hứa số đơn hoặc doanh thu.
+- Chỉ hai biến thể hook để thăm dò sáng tạo; giữ offer, CTA và điều kiện phân phối tương đương. Không biến mẫu nhỏ thành kết luận thống kê.
+- Đề xuất điều kiện điều chỉnh/dừng dựa trên tracking hoạt động, hội thoại hợp lệ và khả năng tiếp nhận; không dùng benchmark thị trường bịa.
+
+VẬN HÀNH ĐƯỢC CHỌN
+- Vai trò phụ trách: chủ shop; không tự tạo tên nhân viên hoặc khẳng định đã có đội ngũ.
+- Giờ trực inbox 09:00–21:00; mục tiêu phản hồi trong 30 phút trong giờ trực, ngoài giờ sang ca kế tiếp. Đây là SLA đã chọn để tổ chức thực hiện, không phải dữ liệu đã đo.
+- Quy trình: hỏi nhu cầu/size → kiểm hàng thực tế → gửi ảnh thật, giá và phí → khách xác nhận → nhận thanh toán khi đã xác nhận hàng và khả năng giao → theo dõi giao/hoàn và tiền thực thu.
+- Chính sách đổi size được chọn: nhận yêu cầu trong 7 ngày từ khi nhận, giày chưa sử dụng, còn hộp/tem và đáp ứng điều kiện kiểm tra. Điều kiện và phí đổi phải được thông báo trước khi chốt đơn; shop xử lý lỗi giao sai từ phía shop. Không tự thêm hứa hẹn bảo hành hoặc ngày giao cố định.
+- Hiện chưa cung cấp tài khoản quảng cáo, Page, tồn kho, ảnh sản phẩm thật và báo giá nhà cung cấp. Ghi các việc này vào checklist nội bộ, không bịa rằng đã hoàn tất. Duyệt nội dung không tự chuyển chúng thành VERIFIED.
+
+NGHIÊN CỨU
+Cho phép nghiên cứu web. Ưu tiên nguồn chính thức, mở trang nguồn và lưu URL/ngày truy cập/phạm vi của nhận định được dùng. Có thể tham khảo Ananas https://ananas.vn/ và Biti’s B2B https://b2b.bitis.com.vn/giay-sneaker-nam-hunter/ để nghiên cứu định vị và trình bày sản phẩm. Không coi chúng là nhà cung cấp, bằng chứng sở hữu hàng, giá vốn hoặc tài sản được phép sao chép. Không đưa giá đối thủ lên banner shop.
+
+ĐẦU RA CUỐI
+- Sáu bài Facebook hoàn chỉnh, mỗi bài có mã, nội dung, CTA, hashtag và lịch tương ứng. Nội dung phải có thể sao chép đăng, không phải đề cương cho người viết.
+- Hai kịch bản video 30–45 giây, có mốc thời gian liên tục, cảnh, lời thoại, chữ và âm thanh. Chỉ kịch bản, không tạo video.
+- Hai banner: BN01 tập trung phong cách tối giản hằng ngày, BN02 tập trung trao đổi mẫu và size. Dùng chữ ngắn, rõ, giá 499.000 VNĐ nếu bố cục phù hợp và CTA Messenger.
+- Khi chưa có ảnh thật N01, dùng minh họa thời trang/phối đồ; không tạo ảnh AI rồi gọi là ảnh sản phẩm thực tế đang có. Không sao chép logo, thiết kế hoặc ảnh của thương hiệu khác. Brief hình cần đúng chủ đề giày/phối đồ, tránh hình trừu tượng không liên quan.
+- Trong nội dung công khai không in [GIẢ THUYẾT], [SUY LUẬN], [TÀI LIỆU], DRAFT, ghi chú người viết hoặc đường dẫn workspace. Các giới hạn dữ liệu và nguồn gốc AI giữ ở internal. Không biến việc bỏ nhãn thành quyền bịa đặc tính sản phẩm.
+- Lưu file đúng hợp đồng workflow. Publication_Editor viết copy cuối, Publication_QA kiểm theo nguồn và hash, Banner_Producer tạo ảnh nếu đã bật.
+- Dừng ở Client_Review để tôi nhập HUMAN: APPROVE. Sau lệnh đó, tôi ủy quyền hoàn thiện, kiểm tra và chốt toàn bộ đầu ra theo kế hoạch; không hỏi duyệt lần hai. Bộ dùng đăng nằm trong publish/, kịch bản trong production/, hồ sơ trong internal/.
+- Không tự đăng bài, gửi tin nhắn khách hàng hoặc chi tiền quảng cáo. Không bỏ qua Gate/QA hoặc sửa manifest để vượt kiểm tra.

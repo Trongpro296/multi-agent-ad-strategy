@@ -1,0 +1,61 @@
+Lập và hoàn thiện chiến dịch công nghệ “TRẠM SỐ — M240: Gọn kết nối, nhẹ tiếng nhấp”.
+
+Tôi ủy quyền dùng các thông số kinh doanh dưới đây như quyết định triển khai đã chốt. Không hỏi lại giá, ngân sách, thời gian, phân khúc hoặc số lượng đầu ra. Quyết định kinh doanh không phải lịch sử quan sát; những dữ liệu chưa được cung cấp phải giữ trạng thái chưa có, không tự tạo số liệu.
+
+1. SẢN PHẨM VÀ THÔNG ĐIỆP
+- Thương hiệu bán lẻ: Trạm Số; kinh doanh online tại TP.HCM. Không tự ghi là đại lý ủy quyền hoặc gian hàng Logitech chính thức.
+- Chỉ một mẫu: Logitech M240 Silent bản tiêu dùng. Không trộn thông số M240 for Business, M185 hoặc sản phẩm khác. Không tự gán part number hoặc màu hàng đang có.
+- Chỉ dùng các claim sản phẩm đã đối chiếu: kết nối Bluetooth trên máy tương thích không chiếm cổng USB; nhấp chuột yên tĩnh; dùng một pin AA.
+- Nguồn chính thức: https://www.logitech.com/vi-vn/shop/p/m240-silent-bluetooth-mouse và https://support.logi.com/hc/en-ca/articles/11654238591767-Specification-M240 . Kiểm tra ngày 15/11/2026; khi cần, mở lại trang và ghi ngày truy cập thực tế.
+- Không dùng số phần trăm giảm ồn, số tháng pin, DPI, polling rate, dải khoảng cách, danh sách phiên bản OS hoặc cam kết tương thích mọi thiết bị trong chiến dịch này. Không nói sạc USB-C, pin sạc, kèm receiver, im lặng tuyệt đối, chữa đau tay, gaming chuyên nghiệp hoặc chuyển nhanh nhiều thiết bị.
+- Định hướng: phụ kiện cho người làm văn phòng muốn kết nối gọn và tiếng nhấp nhẹ hơn. Đây là định hướng thông điệp, không phải nghiên cứu chứng minh tăng năng suất.
+
+2. GIÁ VÀ OFFER ĐƯỢC CHỐT
+- O1: một chuột M240 Silent, giá 449.000 VNĐ/chiếc. Đây là giá bán chủ dự án cho phép công bố, không phải giá niêm yết hãng được website chứng minh.
+- Không giảm giá, không giá gạch bỏ, quà tặng hoặc combo. Phí giao hàng báo riêng trước khi chốt đơn.
+- Chưa có hồ sơ nguồn hàng, ảnh hàng thực, tồn kho hoặc chính sách bảo hành được kiểm. Không ghi sẵn hàng, giao trong ngày, bảo hành chính hãng hay đổi mới ngay. Kiểm và thông báo chính sách thực tế trước nhận đơn; không tự tạo cam kết để làm nội dung hấp dẫn.
+- Không bịa địa chỉ, số điện thoại, URL Page hoặc website. CTA duy nhất: “Nhắn mẫu laptop để được tư vấn tương thích.”
+
+3. PHÂN KHÚC VÀ MỤC TIÊU
+- G1: hội thoại Messenger đủ điều kiện.
+- S1: người đi làm 23–35 tuổi ở TP.HCM, dùng laptop có Bluetooth cho tác vụ văn phòng. Đây là lựa chọn nhắm mục tiêu của chiến dịch, không phải khảo sát đã có.
+- Một qualified lead: người ở khu vực phục vụ, cung cấp model laptop hoặc thông tin Bluetooth/hệ điều hành, có nhu cầu mua và đồng ý trao đổi mức giá. Một người tính một lead chính trong 14 ngày. Loại spam, tuyển dụng và chào bán.
+- Theo dõi riêng hội thoại, qualified lead, đơn xác nhận, đơn giao thành công, hủy/hoàn và tiền thực thu. Không cộng các bước thành tổng khách hoặc tự xem hội thoại là doanh thu.
+- Chưa có lịch sử quảng cáo/đơn/doanh thu, giá vốn hoặc baseline. Không dự báo số đơn, CPL, CPA, ROAS hoặc lợi nhuận không có cơ sở. Dữ liệu thiếu ghi theo schema hiện hành, không thay bằng 0.
+
+4. NGÂN SÁCH VÀ PHÂN PHỐI
+- 07/12/2026 đến hết 20/12/2026, đúng 14 ngày.
+- Tổng 4.200.000 VNĐ: ad_spend 2.800.000, production 1.400.000, other 0. Không cộng lẫn các khoản.
+- Một nền tảng Facebook, Feed là placement trọng tâm, đích Messenger. Không tự thêm kênh, chiến dịch hoặc website.
+- Trần ad spend 200.000 VNĐ/ngày. Tuần 1 (07–13/12) 1.400.000; tuần 2 (14–20/12) 1.400.000.
+- T1 là thử nghiệm sáng tạo thăm dò: cùng S1/O1/giá/CTA; chỉ khác hook. A: Bluetooth cho góc làm việc gọn. B: tiếng nhấp yên tĩnh ở không gian làm việc chung.
+- Cả A và B cùng chạy trong hai tuần. Mỗi biến thể 700.000 VNĐ/tuần, tức 1.400.000 VNĐ/biến thể toàn kỳ. Bảng media có bốn dòng tuần × biến thể; tổng đúng 2.800.000. Không cộng ngân sách kịch bản thay thế vào chi phí chiến dịch.
+- T1 từ 07–20/12, duration_days=14 tính cả ngày đầu/cuối. Không diễn giải mẫu nhỏ là kết quả có ý nghĩa thống kê. Theo dõi hiệu quả hội thoại và chất lượng, chưa kết luận thắng về doanh thu.
+- Các việc chuẩn bị trước ngày 07/12 để trong checklist; execution_calendar chỉ gồm ngày 07–20/12. week phải là số nguyên 1 hoặc 2.
+
+5. VẬN HÀNH
+- Người phụ trách theo vai trò: chủ shop. Giờ trực inbox 09:00–21:00; mục tiêu phản hồi trong 30 phút trong giờ trực, ngoài giờ sang ca kế tiếp. Đây là SLA tổ chức được chọn, không phải kết quả đã đo.
+- Luồng: hỏi model laptop/khả năng Bluetooth và nhu cầu → kiểm hàng thực có → gửi ảnh thật, giá, phí và chính sách áp dụng → khách xác nhận → chỉ nhận tiền khi đã xác nhận hàng và điều kiện giao → theo dõi giao/hủy/hoàn và tiền thực thu.
+- Page, tài khoản ads, thanh toán, nguồn hàng, ảnh thật, tracking chưa được cung cấp. Đưa vào checklist nội bộ; không tự tuyên bố đã có hoặc đã VERIFIED. Duyệt nội dung không tự bật quảng cáo.
+
+6. NGHIÊN CỨU VÀ PHẠM VI
+- Cho phép nghiên cứu web. Chỉ mở rộng khi phục vụ quyết định thực tế; ưu tiên tài liệu hãng cho thông số và nguồn có ngày/phạm vi rõ.
+- Phân biệt nguồn đã mở trong phiên với nguồn chỉ đọc từ đầu vào. Không dùng snippet để nói đã đọc trang.
+- Nếu nguồn khác nhau về phiên bản, hệ điều hành hoặc phần cứng, giữ phạm vi claim hẹp ở mục 1; không tự chọn dữ kiện thuận tiện hoặc ghép bản tiêu dùng với bản doanh nghiệp.
+- Thông số hãng không chứng minh nguồn cung của shop, giá vốn, quyền dùng ảnh hay kết quả quảng cáo. Không tạo review/feedback hoặc chứng nhận kinh doanh giả.
+
+7. BỘ NỘI DUNG CUỐI
+- Sáu bài Facebook đầy đủ, mỗi bài có mã, nội dung, CTA, hashtag và lịch. Cơ cấu: giới thiệu; góc làm việc gọn; nhấp yên tĩnh; hỏi tương thích; hỏi đáp pin/kết nối; lời mời tư vấn giá. Không đăng nguyên ghi chú nghiên cứu.
+- Hai kịch bản: V01 dài 30 giây về kết nối gọn; V02 dài 45 giây về kiểm tra tương thích trước mua. Cảnh liên tục từ 0 tới đúng tổng thời lượng, có visual, lời thoại, chữ và âm thanh theo hợp đồng node. Không tạo video hoặc tuyên bố đã quay.
+- Hai banner BN01 và BN02 cùng khung vuông do tool hỗ trợ. BN01 trọng tâm kết nối Bluetooth; BN02 trọng tâm nhấp yên tĩnh. Có tên shop, tên sản phẩm, giá 449.000 VNĐ nếu bố cục phù hợp và CTA nhất quán. Chữ ngắn, rõ, không dùng claim ngoài mục 1.
+- Khi không có ảnh thật được phép dùng, brief đồ họa minh họa góc làm việc với biểu tượng chuột/kết nối. Không lấy ảnh hãng tùy tiện, không vẽ AI rồi gọi là ảnh thực tế của M240/hàng trong kho. Tránh mô phỏng logo/hình dạng làm bằng chứng thật.
+- Trong copy công khai không có [GIẢ THUYẾT], [SUY LUẬN], [TÀI LIỆU], DRAFT, placeholder, chỉ dẫn người viết hoặc đường dẫn workspace. Không biến thông tin chưa kiểm thành sự thật bằng cách bỏ nhãn.
+
+8. QUY TẮC ĐỂ KHÔNG LẪN HỢP ĐỒNG
+- Các thông số trên là brief khách hàng, không định nghĩa schema kỹ thuật mới. Tên trường, enum và file phải theo System Prompt/skill đúng node và mẫu engine cung cấp.
+- Chỉ ghi file được giao cho vai trò. Nếu tool từ chối, sửa đúng file/trường theo lỗi, không chỉ sửa chat hoặc tự tạo tên tiêu chí.
+- Publication_QA chỉ dùng skill ad-publication-quality-review và JSON template đầu vào có phiên bản/hash thật. Không dùng schema của QA kế hoạch, không tính nhẩm hash, không tự đổi key hoặc mã check.
+- Tham chiếu bằng chứng trong báo cáo cuối chỉ dùng tên file thuộc snapshot cùng vị trí thực; không dẫn manifest hoặc file upload ngoài snapshot làm evidence file. Tổng hợp nguồn đầu vào qua các artifact đúng vai trò trước.
+- Không bỏ qua Gate, xóa issue để lấy PASS hoặc sửa manifest nhằm vượt kiểm tra. QA nội dung kiểm copy và brief ảnh; không tự tuyên bố đã xem ảnh chưa tạo.
+- Dừng ở Client_Review để tôi nhập HUMAN: APPROVE. Một lệnh đó duyệt kế hoạch và ủy quyền hoàn thiện mọi đầu ra dẫn xuất; không hỏi duyệt lần hai. Sau đó vẫn kiểm QA và file trước khi xuất bộ cuối.
+- Bộ dùng đăng ở publish/, kịch bản ở production/, nguồn/QA/điều kiện ở internal/. Không tự đăng, nhắn khách hoặc chi tiền quảng cáo.

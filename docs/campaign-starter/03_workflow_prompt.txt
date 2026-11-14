@@ -1,0 +1,22 @@
+Lập kế hoạch quảng cáo thực tế dựa trên brief và tài liệu tôi cung cấp.
+
+BRIEF ĐÃ ĐIỀN:
+[DÁN NỘI DUNG 01_campaign_brief.md ĐÃ HOÀN THÀNH VÀO ĐÂY]
+
+TÀI LIỆU ĐÍNH KÈM:
+[TÊN FILE, NỘI DUNG, KỲ DỮ LIỆU, PHẠM VI ĐƯỢC DÙNG; CHƯA CÓ THÌ GHI RÕ]
+
+QUYỀN NGHIÊN CỨU WEB:
+[CHỌN CÓ HOẶC KHÔNG; NẾU CÓ, NÊU PHẠM VI]
+
+YÊU CẦU:
+- Đây là dự án thật. Chỉ dùng thông tin đã được cung cấp/xác minh; phần chưa biết nêu rõ.
+- Đọc file bằng tool. Thiếu sản phẩm, mục tiêu, tiền, ngày hoặc thông tin quyết định thì hỏi gộp ở bước làm rõ brief. Không coi ô [CẦN ĐIỀN] là dữ liệu hợp lệ.
+- Giữ đúng địa bàn, kênh, phạm vi, tổng ngân sách và phần quảng cáo/sản xuất/khác. Không tự chốt chỉ tiêu hoặc cơ chế tăng chi tiêu chưa được cho phép.
+- Phân biệt tài liệu được cung cấp, nguồn ngoài đã đọc, suy luận và giả thuyết. Không bịa URL, review, chứng nhận, benchmark, năng lực phục vụ hoặc cam kết hiệu quả.
+- Tracking và asset phản ánh hiện trạng, chưa kiểm không khai đã sẵn sàng. Thiếu cơ sở dự báo thì dùng NOT_ESTIMATED và ô giá trị trống theo schema.
+- Chốt KPI, đơn vị, nguồn dữ liệu, loại trùng, xử lý thiếu dữ liệu và người phụ trách. Thử nghiệm có điều kiện và giới hạn diễn giải; không hứa ý nghĩa thống kê khi thiếu cơ sở.
+- Tạo đủ file bắt buộc, đúng schema, lưu bằng tool và kiểm lại. save_file từ chối CSV thì sửa theo thông báo trong số lượt cho phép; không chỉ sửa lời bàn giao hoặc dùng file cũ để báo thành công.
+- Chat chỉ tóm tắt quyết định, file, giới hạn và việc cần xử lý. Giữ quy tắc định tuyến, Gate, QA, snapshot và manifest của hệ thống.
+- Đủ điều kiện thì dừng tại Client_Review để tôi kiểm đúng plan_version. Không tự duyệt thay tôi, không đăng nội dung hay chạy quảng cáo.
+- Sau khi tôi duyệt hợp lệ, tạo bộ bàn giao theo workflow. Nêu riêng chất lượng kế hoạch và điều kiện triển khai còn mở; QA PASS không có nghĩa chiến dịch đã chạy hoặc tracking/asset đã được xác minh.

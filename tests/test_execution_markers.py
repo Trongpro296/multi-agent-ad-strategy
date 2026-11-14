@@ -49,9 +49,19 @@ def test_functions_and_routers_reject_failure_even_with_success_token(marker):
     assert routes.ad_qa_route(marker+'\nQA: PASS',{}).endswith('[[QA_INVALID]]')
 
 
-@pytest.mark.parametrize('filename',['ad_agency_v2.yaml','ad_agency_v2_auto.yaml','ad_agency_recovery_960ee949.yaml','ad_agency_recovery_960ee949_openai.yaml'])
-def test_all_campaign_edges_are_short_and_script_diagnostics_escape_both(filename):
-    graph=yaml.safe_load((ROOT/'yaml_instance'/filename).read_text(encoding='utf-8'))['graph']
+@pytest.mark.parametrize('filename',['ad_agency_v2.yaml','ad_agency_v2_auto.yaml','generated_recovery','generated_recovery_override'])
+def test_all_campaign_edges_are_short_and_script_diagnostics_escape_both(filename,tmp_path):
+    if filename.startswith('generated_recovery'):
+        # Recovery files contain private session data and are intentionally not
+        # versioned. Exercise the real generator using an isolated fixture.
+        from test_ad_malformed_recovery import prepare_source
+        from tools.prepare_ad_recovery import build_recovery
+        source,log,template,_=prepare_source(tmp_path)
+        model='offline' if filename.endswith('_override') else None
+        doc,_=build_recovery(template,source,log,'offline_source',creative_model=model)
+        graph=doc['graph']
+    else:
+        graph=yaml.safe_load((ROOT/'yaml_instance'/filename).read_text(encoding='utf-8'))['graph']
     for edge in graph['edges']:
         condition=edge.get('condition') or {}
         if not isinstance(condition,dict):continue

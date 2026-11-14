@@ -5,11 +5,14 @@ from pathlib import Path
 import unicodedata
 import datetime
 import re
+import hashlib
 from decimal import Decimal
 from importlib.util import find_spec
 
 from utils.exceptions import WorkflowExecutionError
 from utils.code_execution import require_unsafe_code_execution
+from utils.ad_review_contracts import qa_report_issues
+from utils.ad_csv import CSV_COLUMNS as _COLUMNS
 
 _OUTPUTS = {
     'Director_Brief': ('campaign_brief.json',),
@@ -26,17 +29,21 @@ _OUTPUTS = {
     'Strategy_QA': ('qa_report.json',),
     'Delivery_Packager': ('handoff_notes.md',),
 }
-_COLUMNS = {
-    'sources.csv': ('id','claim','source_url','access_date','scope','evidence_type'),
-    'media_plan.csv': ('channel','role','objective','segment_id','offer_id','budget_pct','budget_amount','currency','start','end','landing_page','assumption'),
-    'budget_scenarios.csv': ('scenario','channel','budget_amount','metric','metric_value','formula','assumption'),
-    'creative_matrix.csv': ('concept_id','segment_id','insight','hook','benefit','proof','cta','format','asset_requirement','test_variant'),
-    'experiment_plan.csv': ('test_id','hypothesis','variant_a','variant_b','primary_metric','min_sample','duration_days','decision_rule'),
-    'execution_calendar.csv': ('week','start','end','channel','activity','owner','deliverable'),
-}
-
-
 def _validate_result(node_id, message, state):
+    if node_id == 'Publication_QA':
+        from utils.ad_publication import validate_publication_qa,verify_sources
+        if state.get('ad_publication_write_errors'):raise WorkflowExecutionError('Unresolved publication QA write rejection',node_id=node_id)
+        verify_sources(state['python_workspace_root'])
+        report=validate_publication_qa(state['python_workspace_root'])
+        message.content='Public content QA: '+report['verdict']+'\n'+json.dumps(report,ensure_ascii=False)
+        return
+    if node_id == 'Publication_Editor':
+        from utils.ad_publication import validate_content,verify_sources
+        if state.get('ad_publication_write_errors'):raise WorkflowExecutionError('Unresolved publication content write rejection',node_id=node_id)
+        verify_sources(state['python_workspace_root'])
+        bundle=validate_content(state['python_workspace_root'])
+        message.content='Final public copy prepared for Human review; plan_version='+bundle['plan_version']
+        return
     names = _OUTPUTS.get(node_id)
     if not names:
         return
@@ -48,7 +55,10 @@ def _validate_result(node_id, message, state):
             return
     workspace = Path(state['python_workspace_root']).resolve()
     problems = []
+    pending = state.get('ad_csv_write_errors', {})
     for name in names:
+        if 'artifacts/' + name in pending:
+            problems.append('unresolved CSV write rejection: ' + name)
         path = workspace / 'artifacts' / name
         if not path.resolve().is_relative_to(workspace) or not path.is_file():
             problems.append('missing/unsafe artifacts/' + name)
@@ -76,6 +86,10 @@ def _validate_result(node_id, message, state):
             problems.append(name + ': ' + type(exc).__name__)
     if problems:
         raise WorkflowExecutionError('Artifact contract failed for '+node_id+': '+'; '.join(problems), node_id=node_id)
+    if node_id == 'Evidence_Digest':
+        from utils.ad_delivery_policy import source_issues_csv
+        findings=source_issues_csv((workspace/'artifacts/sources.csv').read_bytes())
+        if findings:raise WorkflowExecutionError('Evidence source contract failed: '+'; '.join(f['message'] for f in findings),node_id=node_id)
     if node_id == 'Director_Brief':
         brief = json.loads((workspace/'artifacts/campaign_brief.json').read_text(encoding='utf-8-sig'))
         try:
@@ -91,17 +105,40 @@ def _validate_result(node_id, message, state):
         except (KeyError,TypeError,ValueError):
             raise WorkflowExecutionError('Brief READY requires valid budget.ad_spend, currency and campaign dates; ask BRIEF: NEED_INFO instead',node_id=node_id)
     if node_id == 'Strategy_QA':
-        from functions.edge_processor.ad_agency_routes import ad_qa_route
+        if state.get('ad_qa_write_errors'):
+            raise WorkflowExecutionError('Unresolved QA report write rejection; correct qa_report.json before finishing',node_id=node_id)
         qa = json.loads((workspace/'artifacts/qa_report.json').read_text(encoding='utf-8-sig'))
         manifest = json.loads((workspace/'review/review_manifest.json').read_text(encoding='utf-8-sig'))
-        routed = ad_qa_route(message.text_content(), {})
-        verdict = qa.get('verdict') if isinstance(qa,dict) else None
-        if verdict not in ('PASS','REVISE') or not routed.endswith('[[QA_'+str(verdict)+']]') or qa.get('plan_version')!=manifest.get('plan_version') or qa.get('plan_gate_status')!='OK' or not isinstance(qa.get('issues'),list):
-            raise WorkflowExecutionError('QA report/decision/version mismatch; refusing stale or inconsistent approval',node_id=node_id)
+        report_problems = qa_report_issues(qa,manifest.get('plan_version'),manifest.get('files',{}))
+        if report_problems:
+            raise WorkflowExecutionError('QA v2 contract failed: '+'; '.join(report_problems),node_id=node_id)
+        review_files = manifest.get('files')
+        if not isinstance(review_files, dict) or not review_files:
+            raise WorkflowExecutionError('QA snapshot verification failed: missing file hashes',node_id=node_id)
+        for name, expected in review_files.items():
+            path = workspace/'artifacts'/name
+            if (Path(name).name != name or path.is_symlink() or
+                    not path.resolve().is_relative_to(workspace/'artifacts') or
+                    not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != expected):
+                raise WorkflowExecutionError('QA snapshot verification failed: changed/missing/unsafe file '+name,node_id=node_id)
+        # The validated report is authoritative. Never route using model prose.
+        # JSON encoding keeps quoted examples on one line; neutralize reserved
+        # markers in diagnostic text before adding the sole canonical decision.
+        from functions.edge_processor.ad_agency_routes import _clean
+        from utils.execution_markers import EXEC_FAILURE_MARKERS
+        payload = _clean(json.dumps(qa, ensure_ascii=False))
+        for marker in EXEC_FAILURE_MARKERS:
+            payload = payload.replace(marker, 'execution failure (quoted in QA report)')
+        message.content = payload + '\nQA: ' + qa['verdict']
     if not message.text_content().strip():
         if node_id in ('Director_Brief','Strategy_QA'):
             raise WorkflowExecutionError('Missing final routing decision for '+node_id, node_id=node_id)
         message.content = 'Verified saved files:\n' + '\n'.join('artifacts/'+n for n in names)
+    # Only validated artifacts may be referenced instead of pasted verbatim in
+    # a downstream prompt. Hashes prevent eliding a file that has since changed.
+    state.setdefault('ad_artifact_receipts', {})[node_id] = {
+        name: hashlib.sha256((workspace/'artifacts'/name).read_bytes()).hexdigest() for name in names
+    }
 
 
 def ad_agency_bootstrap(data, context):
@@ -111,7 +148,16 @@ def ad_agency_bootstrap(data, context):
     if missing:
         raise WorkflowExecutionError('Missing local build dependencies: '+', '.join(missing))
     context['node_result_validator'] = _validate_result
-    context['agent_request_constraints'] = data or ''
+    context['ad_context_policy'] = 'file_first_v1'
+    # One extra provider attempt per failed turn, inside the configured total
+    # retry budget. Never rerun the node or replay completed tools.
+    context['ad_malformed_retry_limit'] = 1
+    context['ad_csv_write_validation'] = True
+    context['ad_qa_write_validation'] = True
+    context['ad_publication_write_validation'] = True
+    run_date=datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=7))).date().isoformat()
+    context['agent_request_constraints'] = (data or '')+'\nTRUSTED_RUNTIME_DATE (Asia/Ho_Chi_Minh): '+run_date+'. This is the run-start date, not proof of a web access. Record actual access evidence; never use a future campaign date as access_date.'
+    context.pop('ad_plan_last_issues',None)
     normalized = ' '.join(unicodedata.normalize('NFC', data or '').casefold().split())
     no_web = any(term in normalized for term in (
         'không tìm web', 'không dùng web', 'không tìm kiếm web', 'không tìm kiếm trên web',

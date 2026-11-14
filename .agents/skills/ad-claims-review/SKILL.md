@@ -26,3 +26,10 @@ Nếu cần kết luận về quy định hiện hành của một nền tảng/
 ## Kết quả theo vai trò
 
 Bàn giao đối chiếu claim → nguồn → vấn đề → mức ảnh hưởng → sửa đề xuất → người xác nhận. Evidence ghi giới hạn vào digest; Creative chỉ sửa file sáng tạo được giao; QA ghi issue vào schema hiện có. Không sửa hồ sơ nguồn, snapshot/manifest hoặc xóa dấu vết để tạo PASS. Giữ dòng quyết định và quyền ghi file của node; không tạo file riêng nếu chưa được yêu cầu.
+
+
+## Phạm vi claim và đồng bộ hồ sơ
+Đối chiếu cả market_research, competitor_analysis, brand_positioning, campaign_strategy, creative và bản tổng hợp, không chỉ phần mới sửa. Brief giả định chỉ chứng minh thông tin được cung cấp cho bài tập; không chứng minh thực địa hoặc sức chi trả của một phân khúc. Với mỗi claim quan trọng giữ nguồn/file/đoạn và giới hạn. Nếu file nguồn vẫn chứa claim sai nhãn, báo chính file đó; bản tổng hợp thận trọng hơn không tự chữa được lỗi của bộ nguồn. Không suy thiếu bằng chứng thành claim sai: có thể là điều kiện cần xác nhận trước phát hành.
+
+## Độ dài và tái sử dụng đầu vào
+Viết phần nghiệp vụ của vai trò, dẫn file/claim ID thay chép lại brief. Chat tóm tắt file, kết luận và giới hạn; giữ quyết định cuối nếu có. Đọc lại sau ghi, không lặp load khi nguồn chưa đổi. Mốc độ dài trong nhiệm vụ là tham khảo, không cắt schema hoặc bằng chứng để đủ số từ.

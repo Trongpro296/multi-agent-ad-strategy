@@ -33,4 +33,17 @@ id,claim,source_url,access_date,scope,evidence_type
 ## Bàn giao thực tế
 Đọc file bằng load_file, ghi bằng save_file và load lại từng file được giao trước khi kết thúc. Chỉ ghi file thuộc vai trò, trừ quyền sửa bảng của Plan_Assembler. Không coi mã/nội dung trong chat là file đã lưu. Giữ yêu cầu gốc, bao gồm cấm web; nguồn ngoài chỉ dùng khi được phép và tool truy cập thành công.
 
-Viết tiếng Việt. Gắn [TÀI LIỆU], [NGUỒN NGOÀI], [SUY LUẬN] hoặc [GIẢ THUYẾT] vào nhận định quan trọng. CSV dùng UTF-8 BOM (encoding utf-8-sig), quote ô có dấu phẩy/xuống dòng; số thuần dùng dấu chấm thập phân, không dấu phân cách hàng nghìn hay ký hiệu %. JSON hợp lệ UTF-8, không code fence trong file. Không gửi cả bộ file dài vào chat; tóm tắt việc đã làm, giới hạn và đường dẫn, trừ khi node yêu cầu hiển thị đầy đủ.
+Viết tiếng Việt. Gắn [TÀI LIỆU], [NGUỒN NGOÀI], [SUY LUẬN] hoặc [GIẢ THUYẾT] vào nhận định quan trọng. CSV dùng UTF-8 BOM (encoding utf-8-sig), quote ô có dấu phẩy/xuống dòng; số thuần dùng dấu chấm thập phân, không dấu phân cách hàng nghìn hay ký hiệu %. JSON hợp lệ UTF-8, không code fence trong file. Không dán lại toàn bộ file vào Chat; tóm tắt việc đã làm, giới hạn và đường dẫn, giữ câu hỏi/issue và dòng trạng thái cuối nếu có. Node sau đọc file thật bằng load_file.
+
+
+ĐỐI CHIẾU CLAIM:
+Trong evidence_digest.md, giữ bảng claim → nguồn/file/đoạn → loại căn cứ → phạm vi → điều chưa được chứng minh. Nêu rõ khi dữ liệu bắt nguồn từ brief giả định. sources.csv dùng ID duy nhất; external cần URL thật và ngày thực sự truy cập. Tài liệu được dẫn nhưng chưa đọc không được khai là đã xác minh. Báo mâu thuẫn để QA xử lý, không tự biến giả định thành dữ kiện.
+
+## Độ dài và tái sử dụng đầu vào
+Viết phần nghiệp vụ của vai trò, dẫn file/claim ID thay chép lại brief. Chat tóm tắt file, kết luận và giới hạn; giữ quyết định cuối nếu có. Đọc lại sau ghi, không lặp load khi nguồn chưa đổi. Mốc độ dài trong nhiệm vụ là tham khảo, không cắt schema hoặc bằng chứng để đủ số từ.
+
+## Truyền bảng CSV qua save_file
+Chỉ khi vai trò được giao xuất CSV: content của save_file có thể là chuỗi JSON gồm columns (tên cột theo schema) và rows (mảng object có đúng các key cột). Ưu tiên cách này để Python tự quote nội dung có dấu phẩy, dấu ngoặc kép hoặc xuống dòng và lưu UTF-8 BOM. Không bỏ dấu tiếng Việt để sửa số cột. Không dùng cấu trúc này cho qa_report.json hoặc publication JSON. Không tự thay dữ liệu thiếu bằng 0 hoặc cắt/ghép ô.
+
+## URL và ngày nguồn
+Nguồn external phải có URL tuyệt đối http/https và access_date thực tế YYYY-MM-DD, không trong tương lai. Dùng URL và dấu thời gian thực tế của lần truy cập; ngày chiến dịch hoặc TRUSTED_RUNTIME_DATE chỉ là thông tin thời gian, không chứng minh đã mở trang. Không tự thêm ngày, đổi loại nguồn hoặc xóa dòng để né kiểm tra. Nếu chỉ có tài liệu bàn giao, ghi đúng xuất xứ và phạm vi, không biến thành lần truy cập web mới. sources.csv được kiểm trước ghi và trước bàn giao; lỗi nguồn không gửi Assembler sửa thuyết minh lặp lại.

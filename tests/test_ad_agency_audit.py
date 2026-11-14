@@ -50,6 +50,27 @@ def write_csv(root, name, rows):
         writer=csv.DictWriter(f,fieldnames=_COLUMNS[name]); writer.writeheader(); writer.writerows(rows)
 
 
+def qa_fixture(version):
+    """A complete mocked review, explicitly conditional rather than launch-ready."""
+    criteria={
+        'BRIEF_ALIGNMENT':'campaign_brief.json','EVIDENCE':'sources.csv',
+        'CROSS_FILE_CONSISTENCY':'strategy_ids.json','BUDGET':'media_plan.csv',
+        'EXPERIMENTS':'experiment_plan.csv','MEASUREMENT':'measurement_plan.md',
+        'DELIVERY':'advertising_strategy_draft.md','IMPLEMENTATION_CONDITIONS':'measurement_plan.md',
+    }
+    conditions={'TRACKING':'measurement_plan.md','ASSETS':'creative_brief.md',
+                'ACCOUNT_SETUP':'media_plan.csv','OFFER_CLAIMS':'creative_brief.md','OPERATIONS':'measurement_plan.md'}
+    return {'schema_version':'2.0','plan_version':version,'verdict':'PASS','plan_gate_status':'OK','issues':[],
+            'review_summary':'Offline fixture only: planning accepted, implementation not verified.',
+            'criteria_results':[{'criterion_id':key,'status':'PASS','rationale':'Fixture review, not a real campaign assessment.',
+                                 'evidence_refs':[{'file':file,'location':'fixture section/row'}]} for key,file in criteria.items()],
+            'open_assumptions':[],
+            'prelaunch_conditions':[{'condition_id':key,'status':'PENDING','description':'Prepare '+key,'owner':'fixture operator',
+                                     'verification':'Not verified; execute the checklist before launch.',
+                                     'evidence_refs':[{'file':file,'location':'fixture setup section'}]} for key,file in conditions.items()],
+            'implementation_readiness':{'status':'CONDITIONAL','reason':'All implementation checks are pending.'}}
+
+
 def fixture_files(root):
     (root/'artifacts').mkdir(exist_ok=True)
     for name in {name for names in _OUTPUTS.values() for name in names}:
@@ -65,7 +86,12 @@ def fixture_files(root):
         'media_plan.csv':[dict(channel='Facebook',role='acquisition',objective='leads',segment_id='S1',offer_id='O1',budget_pct=100,budget_amount=100,currency='VND',start='2026-01-01',end='2026-01-31',landing_page='N/A',assumption='hypothesis')],
         'budget_scenarios.csv':[dict(scenario='thận trọng',channel='Facebook',budget_amount=100,metric='leads',metric_value=5,formula='100/20',assumption='hypothesis'),dict(scenario='thận trọng',channel='Facebook',budget_amount=100,metric='CPA',metric_value=20,formula='100/5',assumption='hypothesis')],
         'creative_matrix.csv':[dict(concept_id='C1',segment_id='S1',insight='test',hook='hook',benefit='benefit',proof='hypothesis',cta='contact',format='image',asset_requirement='image',test_variant='A')],
-        'experiment_plan.csv':[dict(test_id='T1',hypothesis='test',variant_a='A',variant_b='B',primary_metric='CTR',min_sample=30,duration_days=7,decision_rule='hypothesis')],
+        'experiment_plan.csv':[dict(test_id='T1',hypothesis='test',variant_a='A',variant_b='B',primary_metric='CTR',min_sample=30,duration_days=7,decision_rule='Observe only; missing counts means inconclusive; operator reviews.',
+                                    test_type='CREATIVE_EXPLORATION',sample_unit='impressions',sample_basis='Delivery smoke threshold only, not statistical power.',
+                                    data_source='Mock platform ad report',business_kpi='Recorded visit groups, not inferred from clicks',
+                                    decision_supported='Identify a creative signal for a later test',decision_not_supported='No business lift, significance or automatic budget change',
+                                    decision_owner='fixture operator',prerequisites='Verify tracking and approve assets',missing_data_rule='Stop and report inconclusive if data is missing',
+                                    start='2026-01-01',end='2026-01-07')],
         'execution_calendar.csv':[dict(week=1,start='2026-01-01',end='2026-01-07',channel='Facebook',activity='launch',owner='team',deliverable='ads')],
         'sources.csv':[dict(id='H1',claim='Giả thuyết để kiểm thử',source_url='',access_date='',scope='test',evidence_type='hypothesis')],
     }
@@ -84,18 +110,18 @@ def test_gate_utf8_repeated_metrics_and_build_real_files(tmp_path, monkeypatch, 
     monkeypatch.chdir(tmp_path); fixture_files(tmp_path)
     assert run_gate(tmp_path,filename).rstrip().endswith('[[PLAN_OK]]')
     man=json.loads((tmp_path/'review/review_manifest.json').read_text())
-    (tmp_path/'artifacts/qa_report.json').write_text(json.dumps({'verdict':'PASS','plan_version':man['plan_version']}),encoding='utf-8')
+    (tmp_path/'artifacts/qa_report.json').write_text(json.dumps(qa_fixture(man['plan_version'])),encoding='utf-8')
     space=definitions(filename,'Build_Script'); approved,hashes,problems=space['verify']()
     assert not problems
     names=space['build'](approved,hashes)
-    assert len(names)==23 and {'Campaign_Plan.xlsx','Campaign_Presentation.pptx','manifest.json'} <= set(names)
+    assert len(names)==26 and {'Campaign_Plan.xlsx','Campaign_Presentation.pptx','manifest.json','visit_log_template.csv','daily_report_template.csv','prelaunch_checklist.csv'} <= set(names)
     from openpyxl import load_workbook
     from pptx import Presentation
     wb=load_workbook(tmp_path/'output/Campaign_Plan.xlsx')
     assert wb['Budget_Scenarios']['A2'].value=='thận trọng'
     assert wb['Experiments']['F2'].value==30
     assert wb['Experiments']['F2'].data_type=='n'
-    assert len(Presentation(tmp_path/'output/Campaign_Presentation.pptx').slides)==2
+    assert len(Presentation(tmp_path/'output/Campaign_Presentation.pptx').slides)>=3
     for n,digest in hashes.items():
         target='advertising_strategy.md' if n=='advertising_strategy_draft.md' else n
         assert space['sha'](tmp_path/'output'/target)==digest
@@ -126,7 +152,7 @@ def test_gate_rejects_invalid_data(tmp_path,monkeypatch,case):
 @pytest.mark.parametrize('target',['source','snapshot','qa_version','qa_fail','missing_note'])
 def test_build_blocks_changes_after_review(tmp_path,monkeypatch,target):
     monkeypatch.chdir(tmp_path);fixture_files(tmp_path);run_gate(tmp_path)
-    man=json.loads((tmp_path/'review/review_manifest.json').read_text());qa={'verdict':'PASS','plan_version':man['plan_version']}
+    man=json.loads((tmp_path/'review/review_manifest.json').read_text());qa=qa_fixture(man['plan_version'])
     if target=='qa_version': qa['plan_version']='stale'
     if target=='qa_fail': qa['verdict']='REVISE'
     (tmp_path/'artifacts/qa_report.json').write_text(json.dumps(qa))
@@ -167,7 +193,7 @@ def test_bootstrap_checks_build_dependencies_before_model(monkeypatch):
 def test_qa_contract_before_human_or_packager(tmp_path,monkeypatch,case):
     monkeypatch.chdir(tmp_path);fixture_files(tmp_path);run_gate(tmp_path)
     man=json.loads((tmp_path/'review/review_manifest.json').read_text())
-    qa={'plan_version':man['plan_version'],'verdict':'PASS','plan_gate_status':'OK','issues':[]}
+    qa=qa_fixture(man['plan_version'])
     if case=='stale':qa['plan_version']='old'
     if case=='wrong_verdict':qa['verdict']='REVISE'
     if case=='missing_issues':qa.pop('issues')
@@ -176,7 +202,7 @@ def test_qa_contract_before_human_or_packager(tmp_path,monkeypatch,case):
     msg=Message(role=MessageRole.ASSISTANT,content='QA: PASS')
     if case=='ok':_validate_result('Strategy_QA',msg,{'python_workspace_root':tmp_path})
     else:
-        with pytest.raises(WorkflowExecutionError,match='mismatch'):_validate_result('Strategy_QA',msg,{'python_workspace_root':tmp_path})
+        with pytest.raises(WorkflowExecutionError,match='mismatch|QA v2 contract'):_validate_result('Strategy_QA',msg,{'python_workspace_root':tmp_path})
 
 
 @pytest.mark.parametrize('case',['no_budget','comma_budget','bad_dates'])

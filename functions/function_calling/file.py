@@ -1,5 +1,6 @@
 """File-related function tools for model-invoked file access."""
 
+import codecs
 import fnmatch
 import locale
 import mimetypes
@@ -366,10 +367,16 @@ def save_file(
     """
     Persist data to a workspace file while optionally registering it as an attachment.
 
+    In advertising workflows, contracted CSV files are checked before writing.
+    A rejected write leaves the previous file intact and reports the failing
+    line/cell count. Correct the CSV and call save_file again before finishing.
+
     Args:
         path: Relative path where the file will be written.
-        content: Plain-text payload encoded with `encoding`.
-        encoding: Text encoding used when `content` is provided.
+        content: Plain-text payload encoded with `encoding`. Advertising contracted CSVs also accept a JSON string {"columns": [...], "rows": [{column: value, ...}]}; Python writes CSV quoting and UTF-8 BOM. Keep content a string, not a tool argument object.
+        encoding: Text encoding used when `content` is provided. With utf-8-sig,
+            leading BOM characters are normalized to one file signature; appending
+            to a nonempty file does not insert another signature.
         mode: Whether to replace the file (`overwrite`) or append to it (`append`).
 
     Returns:
@@ -390,16 +397,84 @@ def save_file(
         raise ValueError("Target path points to a directory")
     target.parent.mkdir(parents=True, exist_ok=True)
 
-    data = content.encode(encoding)
+    utf8_signature = codecs.lookup(encoding).name == "utf-8-sig"
+    # Models may include U+FEFF in the payload as well as requesting utf-8-sig.
+    # Let the codec own the file signature, preserving BOMs inside the content.
+    data = (content.lstrip("\ufeff") if utf8_signature else content).encode(encoding)
+
+    relative = ctx.to_workspace_relative(target).replace('\\', '/')
+    guarded_csv = False
+    if _context.get('ad_csv_write_validation'):
+        import csv
+        from utils.ad_csv import CSV_COLUMNS, CSVWriteValidationError, validate_ad_csv
+        guarded_csv = relative == 'artifacts/' + target.name and target.name in CSV_COLUMNS
+        if guarded_csv:
+            try:
+                if content.lstrip('\ufeff \t\r\n').startswith('{'):
+                    import csv
+                    import io
+                    from utils.ad_csv import serialize_csv_table
+                    appending=mode=='append' and target.exists() and target.stat().st_size>0
+                    existing=target.read_bytes() if appending else b''
+                    header=next(csv.reader(io.StringIO(existing.decode('utf-8-sig'))),[]) if appending else None
+                    text=serialize_csv_table(relative,content,existing_header=header,include_header=not appending)
+                    if appending and not existing.endswith((b'\n',b'\r')):text='\r\n'+text
+                    data=text.encode('utf-8-sig');utf8_signature=True
+                candidate = data
+                if mode == 'append' and target.exists() and target.stat().st_size:
+                    suffix = data[len(codecs.BOM_UTF8):] if utf8_signature else data
+                    candidate = target.read_bytes() + suffix
+                validate_ad_csv(relative, candidate)
+            except (CSVWriteValidationError,UnicodeError,csv.Error) as exc:
+                if not isinstance(exc,CSVWriteValidationError):exc=CSVWriteValidationError(relative,str(exc))
+                _context.setdefault('ad_csv_write_errors', {})[relative] = str(exc)
+                raise exc
+
+    guarded_qa = _context.get('ad_qa_write_validation') and relative == 'artifacts/qa_report.json'
+    if guarded_qa:
+        from utils.ad_review_contracts import QAWriteValidationError, validate_qa_write
+        candidate = data
+        if mode == 'append' and target.exists() and target.stat().st_size:
+            candidate = target.read_bytes() + (data[len(codecs.BOM_UTF8):] if utf8_signature else data)
+        try:
+            validate_qa_write(ctx.workspace_root, candidate)
+        except QAWriteValidationError as exc:
+            _context.setdefault('ad_qa_write_errors', {})[relative] = str(exc)
+            raise
+
+    guarded_publication = _context.get('ad_publication_write_validation') and relative in ('artifacts/publication_content.json','artifacts/publication_qa.json')
+    if guarded_publication:
+        from utils.ad_publication import PublicationWriteValidationError, validate_content, validate_publication_qa
+        candidate = data
+        if mode == 'append' and target.exists() and target.stat().st_size:
+            candidate = target.read_bytes() + (data[len(codecs.BOM_UTF8):] if utf8_signature else data)
+        try:
+            (validate_content if target.name=='publication_content.json' else validate_publication_qa)(ctx.workspace_root,candidate)
+        except (ValueError,TypeError,KeyError,OSError) as exc:
+            detail=str(exc)
+            if target.name=='publication_qa.json':
+                import json
+                from utils.ad_publication import publication_qa_template
+                detail+='\nUse this exact JSON shape and identities; fill all reasons/references based on actual review, do not save the incomplete template unchanged: '+json.dumps(publication_qa_template(ctx.workspace_root),ensure_ascii=False)
+            _context.setdefault('ad_publication_write_errors',{})[relative]=detail
+            raise PublicationWriteValidationError(relative,detail) from exc
 
     write_mode = "wb" if mode == "overwrite" else "ab"
     try:
         with target.open(write_mode) as handle:
+            if utf8_signature and mode == "append" and handle.tell() > 0:
+                data = data[len(codecs.BOM_UTF8):]
             handle.write(data)
     except OSError as exc:
         raise OSError(f"Failed to write file '{target}': {exc}") from exc
 
     size = target.stat().st_size if target.exists() else None
+    if guarded_csv:
+        _context.setdefault('ad_csv_write_errors', {}).pop(relative, None)
+    if guarded_qa:
+        _context.setdefault('ad_qa_write_errors', {}).pop(relative, None)
+    if guarded_publication:
+        _context.setdefault('ad_publication_write_errors', {}).pop(relative, None)
     return {
         "path": ctx.to_workspace_relative(target),
         "absolute_path": str(target),

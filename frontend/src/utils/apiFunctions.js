@@ -493,7 +493,7 @@ export async function postBatchWorkflow({ file, sessionId, yamlFile, maxParallel
 }
 
 // Upload a binary file
-export async function postFile(sessionId, file) {
+export async function postFile(sessionId, file, { signal } = {}) {
   try {
     if (!sessionId) {
       throw new Error('Missing session id')
@@ -517,7 +517,8 @@ export async function postFile(sessionId, file) {
 
     const response = await fetch(apiUrl(`/api/uploads/${encodeURIComponent(sessionId)}`), {
       method: 'POST',
-      body: formData
+      body: formData,
+      signal,
     })
 
     const data = await response.json().catch(() => ({}))
@@ -535,7 +536,7 @@ export async function postFile(sessionId, file) {
 
     return {
       success: false,
-      message: 'Failed to upload file'
+      message: typeof data.detail === 'string' ? data.detail : `File upload failed (${response.status})`
     }
   } catch (error) {
     console.error('Error uploading file:', error)

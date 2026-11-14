@@ -163,7 +163,27 @@
     "alert_download_logs_failed": "下载失败，请稍后重试",
     "no_initial_instructions": "未提供初始说明",
     "workflow_cancelled": "工作流已取消",
-    "reconnected": "已重新连接到现有会话"
+    "reconnected": "已重新连接到现有会话",
+    "composer_label": "任务消息输入框",
+    "composer_files": "附件",
+    "composer_preview": "预览 {name}",
+    "composer_remove": "移除 {name}",
+    "composer_add": "添加文件",
+    "composer_retry": "重试",
+    "composer_file_queued": "等待上传",
+    "composer_file_uploading": "上传中…",
+    "composer_file_ready": "已就绪",
+    "composer_file_error": "上传失败",
+    "composer_reply": "发送回复",
+    "composer_uploading_hint": "文件上传中，请等待上传完成后发送。",
+    "composer_error_hint": "请重试或移除上传失败的文件后再发送。",
+    "composer_relaunch_hint": "请先重新启动工作流，再输入新的请求。",
+    "composer_connecting_hint": "等待连接…",
+    "composer_sending_hint": "发送中…",
+    "composer_running_hint": "工作流运行中，需要回复时将开放输入。",
+    "composer_keyboard_hint": "Ctrl / ⌘ + Enter 发送 · Enter 换行",
+    "composer_send_error": "发送失败，草稿已保留。请检查连接后重试。",
+    "resize_chat": "调整聊天面板宽度"
   },
   "components": {
     "workflow_edge": {

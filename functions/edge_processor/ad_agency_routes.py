@@ -123,3 +123,42 @@ def ad_checked_payload(data, _context):
         if _fallback(data, family, states) is None:
             return data
     return None
+
+
+def ad_plan_classify(data, context):
+    """Run once per Gate output: classify ownership and detect no-progress."""
+    import json
+    text=str(data or '').replace('\r\n','\n').replace('\r','')
+    def blocked(report,reason,owner):
+        report=dict(report);report['status']='ERROR';report['repair_owner']=owner
+        report['errors']=list(report.get('errors') or [])+[reason]
+        context.pop('ad_plan_last_issues',None)
+        payload=_clean(json.dumps(report,ensure_ascii=False))
+        from utils.execution_markers import EXEC_FAILURE_MARKERS
+        for marker in EXEC_FAILURE_MARKERS:payload=payload.replace(marker,'execution failure (diagnostic)')
+        return payload+'\nPLAN: ERROR\n[[PLAN_ERROR]]'
+    if _fallback(text,'PLAN',('OK','ISSUES','ERROR')) is not None:
+        return blocked({},'Invalid Plan_Gate result envelope','workflow')
+    try:
+        body,separator,_=text.rpartition('\nPLAN: ')
+        if not separator:raise ValueError('missing status line')
+        report=json.loads(body);status=report['status']
+        if status not in ('OK','ISSUES','ERROR') or not text.rstrip().endswith('[[PLAN_'+status+']]'):raise ValueError('status mismatch')
+        if not isinstance(report.get('errors'),list) or not isinstance(report.get('issues'),list):raise ValueError('errors/issues must be lists')
+    except (ValueError,KeyError,TypeError):return blocked({},'Invalid Plan_Gate JSON/status','workflow')
+    if status=='OK' and (report['errors'] or report['issues']):return blocked(report,'Contradictory successful Gate result','workflow')
+    if status=='ISSUES' and report['errors']:return blocked(report,'Gate errors cannot enter a repair loop','workflow')
+    if status!='ISSUES':
+        context.pop('ad_plan_last_issues',None)
+        return data
+    issues=report['issues']
+    if not issues or any(not isinstance(issue,str) or not issue.strip() for issue in issues):return blocked(report,'Invalid empty/malformed repair issues','workflow')
+    readonly=('campaign_brief.json','market_research.md','competitor_analysis.md','audience_segments.json','customer_journey.md','evidence_digest.md','sources.csv')
+    source_issues=[issue for issue in issues if any(re.match(r'^'+re.escape(name)+r'(?:[\s:\[]|$)',issue.strip()) for name in readonly)]
+    if source_issues:
+        return blocked(report,'Source/brief verification is outside Plan_Assembler permissions. Route to source owner; do not repeat the assembly loop.','Evidence/Research/Brief owner')
+    signature=tuple(sorted(set(' '.join(issue.split()) for issue in issues)))
+    if context.get('ad_plan_last_issues')==signature:
+        return blocked(report,'NO_PROGRESS: the same unresolved Gate issues remain after a repair. Stop repeated model calls and inspect the named files.','manual repair')
+    context['ad_plan_last_issues']=signature
+    return data

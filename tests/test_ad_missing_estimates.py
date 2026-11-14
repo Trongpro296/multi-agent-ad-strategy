@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from test_ad_agency_audit import FILES, definitions, fixture_files, run_gate
+from test_ad_agency_audit import FILES, definitions, fixture_files, run_gate, qa_fixture
 from test_ad_malformed_recovery import prepare_source
 from tools.prepare_ad_recovery import build_recovery, normalize_missing_estimates, restore_script
 
@@ -31,7 +31,7 @@ def test_unknown_forecast_survives_gate_snapshot_and_excel(tmp_path,monkeypatch,
     assert output.rstrip().endswith('[[PLAN_OK]]')
     assert 'unestimated_metrics' in output and 'No historical conversion data' in output
     manifest=json.loads((tmp_path/'review/review_manifest.json').read_text())
-    (tmp_path/'artifacts/qa_report.json').write_text(json.dumps({'verdict':'PASS','plan_version':manifest['plan_version']}))
+    (tmp_path/'artifacts/qa_report.json').write_text(json.dumps(qa_fixture(manifest['plan_version'])))
     script=definitions(filename,'Build_Script')
     approved,hashes,problems=script['verify']()
     assert not problems

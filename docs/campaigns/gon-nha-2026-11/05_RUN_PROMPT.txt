@@ -1,0 +1,33 @@
+Lập kế hoạch ra mắt dự án dịch vụ dọn căn hộ theo giờ “Gọn Nhà” tại khu vực Bình Thạnh, TP.HCM.
+
+Đây là dự án kinh doanh mới do tôi cho phép xây dựng phương án, không phải doanh nghiệp đã có dữ liệu vận hành. Tên là tên làm việc, chưa xác minh quyền sử dụng. Phân biệt quyết định đề xuất dưới đây với dữ kiện đã được kiểm chứng; không khai dự án có sẵn nhân sự, khách hàng hoặc tài khoản.
+
+BRIEF:
+- Gói trọng tâm: một ca dọn căn hộ 3 giờ, phạm vi công việc thỏa thuận trước theo tình trạng nhà. Không hứa toàn bộ căn hộ hoàn tất trong 3 giờ. Không nhận sau xây dựng, công việc nguy hiểm hoặc vệ sinh chuyên sâu chưa có năng lực.
+- Giá đề xuất để lập kế hoạch: 279000 VND/ca. Chưa xác minh giá vốn, dụng cụ, di chuyển, thuế/phí, phụ thu, chính sách đổi/hủy. Không công bố giá như offer đã duyệt, không tạo giảm giá hoặc giá gạch bỏ giả. Giữ việc chốt giá/phụ phí là điều kiện trước phát hành.
+- Địa bàn: khu vực thường gọi là Bình Thạnh, TP.HCM; chốt vùng có thể phục vụ trước nhận lịch. Đây không phải khẳng định địa giới hành chính hiện hành.
+- Nhóm ưu tiên: người đi làm sống trong căn hộ có nhu cầu dọn thông thường và đặt trước. Đây là giả thuyết khách hàng, chưa khảo sát xác nhận.
+- Mục tiêu chính: hội thoại đủ điều kiện. Một lead hợp lệ khi đúng vùng dự kiến, nhu cầu phù hợp, có thông tin khu vực/phạm vi/tình trạng và thời gian mong muốn, đồng ý trao đổi báo giá; loại spam/tuyển dụng/chào bán. Một người tính một lead chính trong 14 ngày; booking và ca hoàn thành là các bước riêng.
+- Theo dõi thêm: báo giá thực đã gửi, lịch hai bên đã xác nhận và có người thực hiện, ca thật hoàn thành, tiền thực thu. Chưa có dữ liệu chốt khách/lãi đóng góp nên không cam kết số lead, booking hay doanh thu.
+- Thời gian đề xuất: 2026-11-23 đến 2026-12-06, 14 ngày, Asia/Saigon. Chuẩn bị đến 2026-11-22; chưa xong điều kiện phải hoãn và cập nhật kế hoạch qua review.
+- Ngân sách lập phương án: tổng 3000000 VND, ad_spend 2100000, production 900000, other 0. Phân bổ ads số học 150000/ngày, không phải bảo đảm nền tảng chi đúng từng ngày. Đây là ngân sách đề xuất, không cho phép tự chạy hoặc chi tiền. Chưa gồm chi phí thực hiện dịch vụ; không tự tăng tổng hoặc chuyển production sang ads.
+- Chỉ một kênh Facebook, Messenger làm điểm nhận khách. Trang/tài khoản quảng cáo, phương thức thanh toán, website và tracking chưa được tạo/xác minh; không có URL trang dự án.
+- Chưa có ảnh thật/review/chứng nhận/bảo hiểm/nhân sự vệ sinh/lịch trực/năng lực ca/ngày. Tôi là chủ dự án/người duyệt; vai trò vận hành cần phân công thực tế. Ghi điều kiện mở, không dựng người hay năng lực giả.
+- Dùng sổ lead/booking nội bộ dự kiến, mã chiến dịch GN2611. Phân biệt paid_verified, paid_self_reported, organic_verified, unknown; không suy ra nguồn chắc chắn chỉ từ khách tự khai. Giữ dữ liệu cá nhân ngoài tài liệu gửi model.
+- Một concept về trao đổi rõ phạm vi và báo giá trước chốt lịch, hai biến thể hook. Chỉ là hướng đề xuất; không coi phân phối quảng cáo là thử nghiệm ngẫu nhiên hoặc hứa kết luận nhân quả.
+
+NGHIÊN CỨU:
+Cho phép nghiên cứu web, ưu tiên nguồn chính thức và dẫn URL/ngày đọc/phạm vi. Tôi đính kèm hồ sơ đầu vào nếu giao diện hỗ trợ. Các nguồn sau đã được đọc ngày 2026-11-14 bởi người chuẩn bị; việc đó không có nghĩa Agent vừa truy cập lại:
+1. https://www.btaskee.com/vi-VN/giup-viec-nha-theo-gio/
+2. https://jupviec.vn/jupviecvn--muc-gia-dich-vu-theo-gio-d790.html — bài ghi năm 2024, chỉ tham khảo lịch sử, không gọi giá hiện hành.
+3. https://guvico.com/giup-viec-theo-gio — giá có điều kiện; không suy diễn hai số hiển thị cạnh nhau thành một khuyến mãi chắc chắn.
+Nguồn chỉ xác nhận đối thủ công bố gì, không xác minh chất lượng thực địa hoặc hiệu quả quảng cáo. Chưa có baseline CPL/CAC/CTR/chốt khách của dự án. Không bịa benchmark, lợi thế rẻ nhất, review, dữ liệu bán hàng hay bằng chứng của Gọn Nhà. Nếu tool web không khả dụng, nêu giới hạn và dùng nguồn đính kèm; không khai đã đọc lại thành công.
+
+YÊU CẦU WORKFLOW:
+- Tạo đủ file bắt buộc, đúng schema và lưu bằng tool. CSV bị từ chối thì sửa theo lỗi trong số lượt cho phép, không chỉ sửa lời bàn giao.
+- Giữ ID/ngày/tiền/offer/concept nhất quán. Dự báo thiếu cơ sở dùng NOT_ESTIMATED và ô giá trị trống theo schema, không dùng số 0 làm dữ liệu chưa biết.
+- Chuẩn bị kế hoạch thực thi, chi phí cần xác minh, KPI và một thăm dò creative phù hợp phạm vi. Không thêm test chi tiền chỉ để đủ loại; kiểm tracking nằm trong checklist trước triển khai.
+- Giữ TRACKING, ASSETS, ACCOUNT_SETUP, OFFER_CLAIMS, OPERATIONS là điều kiện chưa xác minh. QA PASS về kế hoạch không có nghĩa sẵn sàng chạy. Không đánh dấu VERIFIED khi không có bằng chứng.
+- Chat tóm tắt file, kết luận, giới hạn và người/việc còn thiếu; không dán lại toàn bộ tài liệu.
+- Giữ Gate, QA, snapshot, manifest và giới hạn vòng sửa. Không tự sửa bằng chứng/hash để vượt kiểm tra.
+- Dừng tại Client_Review để tôi xem đúng plan_version. Không tự duyệt, không đăng nội dung, tạo tài khoản, liên hệ đối tác hoặc chạy quảng cáo. Chỉ sau lệnh duyệt hợp lệ mới Build bộ bàn giao theo workflow.

@@ -86,18 +86,32 @@ def normalize_missing_estimates(data):
     return output.getvalue().encode('utf-8-sig'),changes
 
 
-def build_recovery(template,workspace,log_path,source_name,creative_model=None,normalize_estimates=False):
+def build_recovery(template,workspace,log_path,source_name,creative_model=None,normalize_estimates=False,*,from_snapshot=False,source_request=None):
     template=copy.deepcopy(template)
-    completed=set();request=None
-    for line in Path(log_path).open(encoding='utf-8'):
-        try:entry=json.loads(line)
-        except ValueError:continue
-        if entry.get('event_type')=='NODE_END':
-            completed.add(entry.get('node_id'))
-            if entry.get('node_id')=='Campaign_Input' and isinstance(entry.get('output'),str):
-                request=entry['output']
-    if not request:raise ValueError('Original Campaign_Input request is missing from the session log')
+    completed=set();request=source_request
     workspace=Path(workspace).resolve();artifacts=workspace/'artifacts'
+    if from_snapshot:
+        if not isinstance(request,str) or not request.strip():
+            raise ValueError('Snapshot recovery requires an explicit recovery request')
+        snapshot=json.loads((workspace/'review/review_manifest.json').read_text(encoding='utf-8-sig'))
+        hashes=snapshot.get('files')
+        if not isinstance(hashes,dict) or not hashes:
+            raise ValueError('Snapshot recovery requires file hashes')
+        for name,expected in hashes.items():
+            path=artifacts/name
+            if Path(name).name!=name or path.is_symlink() or not path.resolve().is_relative_to(workspace) or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest()!=expected:
+                raise ValueError('Snapshot source changed/missing/unsafe: '+name)
+        completed={node for node,names in _OUTPUTS.items() if all(name in hashes for name in names)}
+    else:
+        for line in Path(log_path).open(encoding='utf-8'):
+            try:entry=json.loads(line)
+            except ValueError:continue
+            if entry.get('workflow_id') and entry['workflow_id']!=source_name:continue
+            if entry.get('event_type')=='NODE_END':
+                completed.add(entry.get('node_id'))
+                if entry.get('node_id')=='Campaign_Input' and isinstance(entry.get('output'),str):
+                    request=entry['output']
+    if not request:raise ValueError('Original Campaign_Input request is missing from the session log')
     review_names={n for node,names in _OUTPUTS.items() if node not in ('Strategy_QA','Delivery_Packager') for n in names}
     files={};source_hashes={};transformations={}
     for name in sorted(review_names):
@@ -167,7 +181,7 @@ Sau khi lưu CSV, load lại cả hai file để kiểm tra. Chat chỉ cần t�
     graph['description']='Khôi phục '+source_name+': dùng lại artifacts, chỉ chạy các Agent còn thiếu và nghiệm thu mới.'
     manifest={'source_session':source_name,'files':{n:r['sha256'] for n,r in files.items()},'cached_agents':cached,'pending_agents':pending,
               'source_files':source_hashes,'transformations':transformations,
-              'creative_model_override':creative_model,
+              'creative_model_override':creative_model,'cache_basis':'verified_snapshot' if from_snapshot else 'node_end_log',
               'note':'Prepared offline; not a QA approval or proof of model reliability. Original session is unchanged.'}
     return template,manifest
 
@@ -179,7 +193,10 @@ def main():
     parser.add_argument('--output',help='New .yaml path under yaml_instance; existing files are never overwritten')
     parser.add_argument('--creative-model',help='Optional explicit model override for Creative only in the generated recovery YAML')
     parser.add_argument('--normalize-missing-estimates',action='store_true',help='Translate the observed explicit unknown forecast text to blank + NOT_ESTIMATED in the recovery copy only')
+    parser.add_argument('--from-snapshot',action='store_true',help='Cache existing source artifacts only after checking every review manifest hash; requires --request-file')
+    parser.add_argument('--request-file',help='Explicit recovery instructions when using --from-snapshot')
     args=parser.parse_args()
+    if bool(args.request_file)!=bool(args.from_snapshot):parser.error('--from-snapshot and --request-file must be supplied together')
     sid=validate_path_component(args.session,field='session')
     if not sid.startswith('session_'):sid='session_'+sid
     template_path=(ROOT/'yaml_instance'/args.template).resolve()
@@ -189,7 +206,7 @@ def main():
     if not output.is_relative_to((ROOT/'yaml_instance').resolve()):raise ValueError('Output must be under yaml_instance')
     manifest_path=output.with_suffix('.recovery.json')
     if output.exists() or manifest_path.exists():raise FileExistsError('Choose a new output filename')
-    doc,manifest=build_recovery(yaml.safe_load(template_path.read_text(encoding='utf-8')),source/'code_workspace',ROOT/'logs'/(sid+'.log'),sid,args.creative_model,args.normalize_missing_estimates)
+    doc,manifest=build_recovery(yaml.safe_load(template_path.read_text(encoding='utf-8')),source/'code_workspace',ROOT/'logs'/(sid+'.log'),sid,args.creative_model,args.normalize_missing_estimates,from_snapshot=args.from_snapshot,source_request=Path(args.request_file).read_text(encoding='utf-8-sig') if args.request_file else None)
     # Schema/graph validation only; never execute the workflow during preparation.
     from check.check import check_config
     error=check_config(doc)

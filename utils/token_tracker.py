@@ -43,6 +43,11 @@ class TokenTracker:
         self.model_usages = defaultdict(TokenUsage)
         self.call_history = []
         self.node_call_counts = defaultdict(int)  # Track how many times each node is called
+        self.context_optimizations = []
+
+    def record_context_optimization(self, stats: Dict[str, Any]) -> None:
+        """Record local prompt compaction separately from provider-reported usage."""
+        self.context_optimizations.append(dict(stats))
 
     def record_usage(self, node_id: str, model_name: str, usage: TokenUsage, provider: str = None):
         """Records token usage for a specific call, handling multiple node executions."""
@@ -133,6 +138,8 @@ class TokenTracker:
                 for model_name, usage in self.model_usages.items()
             },
             "node_execution_counts": dict(self.node_call_counts),
+            "model_call_count": len(self.call_history),
+            "context_optimizations": list(self.context_optimizations),
             "call_history": self.call_history,
         }
         return data

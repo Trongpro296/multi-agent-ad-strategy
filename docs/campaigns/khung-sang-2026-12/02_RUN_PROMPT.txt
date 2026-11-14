@@ -1,0 +1,31 @@
+Lập kế hoạch chiến dịch ra mắt dịch vụ chụp ảnh sản phẩm “Khung Sáng” cho shop online tại TP.HCM.
+
+Đây là phương án kinh doanh mới để chuẩn bị triển khai, tên làm việc chưa xác minh quyền sử dụng. Những lựa chọn dưới đây là quyết định đề xuất do tôi cho phép lập kế hoạch; không khai rằng doanh nghiệp đã có studio, đội ngũ, khách hàng hoặc tài khoản.
+
+BRIEF:
+- Dịch vụ trọng tâm: gói chụp 10 SKU phụ kiện/gia dụng nhỏ, tổng 20 ảnh hoàn thiện, nền đơn giản, 1 vòng chỉnh sửa theo phạm vi thống nhất. Không nhận quay video/người mẫu/bối cảnh đặc biệt/đồ cồng kềnh hoặc chất liệu khó chưa có năng lực.
+- Giá để lập phương án: 1500000 VND/gói. Giá vốn, thuế/phí, giao nhận, quyền dùng ảnh và chỉnh sửa ngoài phạm vi chưa xác nhận; chưa được công bố như báo giá đã duyệt. Không tạo giảm giá hoặc giá gạch bỏ giả.
+- Thời hạn bàn giao đề xuất 5 ngày làm việc sau khi nhận đủ đầu vào và chốt phạm vi; phải xác minh năng lực trước cam kết thực tế.
+- Khách ưu tiên: chủ shop online tại TP.HCM muốn bộ ảnh sản phẩm nhỏ để đăng bán; đây là giả thuyết cần xác minh, không có số liệu quy mô thị trường của dự án.
+- Mục tiêu: yêu cầu báo giá đủ điều kiện. Một lead chính/người/kỳ khi đúng vùng, có loại/số SKU, nhu cầu ảnh hoặc kênh sử dụng, thời hạn mong muốn, nhu cầu phù hợp dịch vụ và đồng ý trao đổi báo giá. Loại spam/tuyển dụng/chào bán.
+- Theo dõi tiếp báo giá thực đã gửi, booking hai bên đã xác nhận, sản phẩm nhận, ảnh thật bàn giao và tiền thực thu. Không coi inbox là booking hoặc coi minh họa AI là sản phẩm chụp thật.
+- Thời gian dự kiến 2026-12-01 đến 2026-12-14, 14 ngày, Asia/Saigon. Chuẩn bị trước 2026-11-30; thiếu điều kiện thì hoãn và review lại, không tự chạy cho kịp lịch.
+- Tổng ngân sách lập phương án 4000000 VND: ad_spend 2800000, production 1200000, other 0. Chỉ Facebook → Messenger, phân bổ ads số học 200000/ngày không phải bảo đảm nền tảng chi đúng mỗi ngày. Không tự tăng tiền hoặc chuyển production sang ads. Chưa có báo giá sản xuất/chi phí API ảnh hoặc chi phí thực hiện dịch vụ cho khách; không coi là 0 hoặc tự khẳng định ngân sách đủ mọi việc.
+- Chưa có fanpage/tài khoản quảng cáo/thanh toán/website/CRM/pixel đã xác minh. Không có URL trang dự án. Tracking thủ công mới là phương án; mã chiến dịch KS2612. Phân biệt paid_verified, paid_self_reported, organic_verified, unknown; không đếm trùng, không gửi dữ liệu cá nhân khách vào model.
+- Chưa có người chụp, thiết bị, lịch nhận, công suất, ảnh portfolio có quyền dùng, review, khách cũ hoặc baseline CPL/CAC/chốt khách. Tôi là chủ dự án/người duyệt; nhân sự vận hành cần phân công thực tế.
+- TRACKING, ASSETS, ACCOUNT_SETUP, OFFER_CLAIMS, OPERATIONS giữ điều kiện mở/PENDING; không đánh dấu VERIFIED hoặc sẵn sàng phát hành khi chưa có bằng chứng.
+
+NGHIÊN CỨU:
+Được phép web, ưu tiên nguồn chính thức, ghi URL/ngày đọc và giới hạn. Hồ sơ đính kèm 01_BRIEF_AND_SOURCES.md chứa nguồn được người chuẩn bị đọc ngày 2026-11-14:
+https://nuvostudio.com.vn/bao-gia-dich-vu-chup-anh-san-pham/
+https://mhphotomedia.com/bang-gia-quay-phim-chup-hinh-san-pham-noi-that/
+Không khai Agent vừa đọc lại nếu chưa gọi tool thành công. Giá thay đổi theo phạm vi; không dùng giá quay video/chụp nội thất như giá chụp sản phẩm nhỏ hoặc suy ra CPL từ giá dịch vụ. Nếu web không khả dụng, ghi giới hạn và dùng tài liệu được cung cấp. Không bịa nguồn, benchmark, review, cam kết tăng doanh số hoặc khả năng cung cấp của Khung Sáng.
+
+YÊU CẦU:
+1. Tạo đủ file bắt buộc, đúng schema và dùng tool lưu/kiểm lại. Nếu CSV bị từ chối, sửa theo dòng/số ô lỗi trong giới hạn cho phép; không chỉ sửa lời bàn giao.
+2. Giữ tiền, ngày, ID, concept, offer và CTA nhất quán. Thiếu cơ sở dự báo thì dùng NOT_ESTIMATED và giá trị trống đúng schema; không điền số 0 làm số liệu chưa biết hoặc cam kết số lead/đơn/doanh thu.
+3. Một nhóm khách, một kênh, một concept, hai hook; không mở rộng nhiều test chi tiền để đủ loại. Chưa đủ dữ liệu không tuyên bố biến thể thắng hay kết luận nhân quả.
+4. Trong creative_brief.md, chuẩn bị 6 bài đăng hoàn chỉnh (mục tiêu, hook, nội dung, CTA, gợi ý hình) và 2 kịch bản video (mốc thời gian, cảnh/hình, lời thoại/âm thanh/chữ, CTA). Chỉ viết kịch bản, không dựng video. Không tự thêm output bắt buộc ngoài hợp đồng đang có. Nội dung là DRAFT, giá/claim chưa xác minh không dùng như lời hứa đã duyệt phát hành.
+5. Banner_Producer dùng hook/CTA đã qua review để tạo minh họa khi được bật, sau bước tôi duyệt kế hoạch. Giữ nhãn minh họa AI/DRAFT; không dùng ảnh đó làm portfolio chụp thật, ảnh khách thật hoặc bằng chứng tay nghề; không mượn logo/ảnh/review của đối thủ.
+6. Chat tóm tắt file, quyết định, giới hạn và việc cần người xử lý; không dán lại toàn bộ tài liệu. Giữ Gate, QA, snapshot, manifest và giới hạn sửa/retry của hệ thống.
+7. Dừng tại Client_Review để tôi xem đúng plan_version. Không tự duyệt, liên hệ đối tác, tạo tài khoản, đăng nội dung, chụp ảnh hoặc chạy quảng cáo. Duyệt kế hoạch không đồng nghĩa duyệt phát hành ảnh hay cấp quyền chi tiền quảng cáo. Sau lệnh duyệt hợp lệ, tiếp tục node banner nếu bật và Build bộ bàn giao đúng trạng thái.

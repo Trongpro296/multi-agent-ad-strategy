@@ -1,6 +1,6 @@
 # Hướng dẫn cài đặt và sử dụng AI Advertising Strategy Team
 
-Áp dụng cho dự án tại `D:\Project\chatdev`, đối chiếu với source và YAML ngày **13/11/2026**. Đây là hướng dẫn vận hành cấu hình hiện tại, không phải lịch sử các lần sửa lỗi. Nếu chuyển dự án sang thư mục khác, thay đường dẫn trong các lệnh tương ứng.
+Áp dụng cho dự án tại `D:\Project\chatdev`, đối chiếu với source và YAML ngày **15/11/2026**. Đây là hướng dẫn vận hành cấu hình hiện tại, không phải lịch sử các lần sửa lỗi. Nếu chuyển dự án sang thư mục khác, thay đường dẫn trong các lệnh tương ứng.
 
 ## Mục lục
 
@@ -11,8 +11,8 @@
 5. [Thêm và kiểm tra tools](#5-tools)
 6. [Thêm và sử dụng skills](#6-skills)
 7. [Luồng xử lý tổng thể](#7-luong)
-8. [Giải thích 13 node Agent](#8-agents)
-9. [Giải thích 16 node điều phối](#9-dieu-phoi)
+8. [Giải thích 15 node Agent](#8-agents)
+9. [Giải thích 18 node điều phối](#9-dieu-phoi)
 10. [Edge: kết nối, điều kiện và truyền dữ liệu](#10-edges)
 11. [Trạng thái, Router và thao tác duyệt](#11-trang-thai)
 12. [File, schema dữ liệu và phiên bản](#12-du-lieu)
@@ -21,19 +21,20 @@
 15. [Xử lý lỗi và tiết kiệm token](#15-su-co)
 16. [Danh sách kiểm tra trước khi chạy](#16-checklist)
 17. [Phụ lục cấu hình lấy từ YAML](#17-phu-luc)
+18. [Bộ đầu ra cuối và một lần duyệt](#18-xuat-ban)
+19. [Chuẩn bị đưa dự án lên Git](#19-git)
 
 <a id="1-he-thong"></a>
 ## 1. Hệ thống làm gì và chọn workflow nào
 
 Bạn nhập một brief chiến dịch: sản phẩm, khách hàng, mục tiêu, ngân sách, thời gian và ràng buộc. Các Agent lần lượt nghiên cứu, lập chiến lược, phân bổ ngân sách, đề xuất nội dung, thiết kế đo lường rồi tổng hợp thành hồ sơ để QA và bạn duyệt.
 
-Kết quả là **tài liệu lập kế hoạch quảng cáo**, không phải chiến dịch đã được tạo trong Meta/Google Ads. Hệ thống hiện không tự chi tiền, đăng quảng cáo, tạo ảnh/video hoàn chỉnh hoặc lấy số liệu tài khoản quảng cáo theo thời gian thực.
+Kết quả gồm **hồ sơ kế hoạch và bộ nội dung cuối theo kế hoạch đã duyệt**: bài đăng, kịch bản video, lịch đăng và banner PNG khi bật tạo ảnh. Hệ thống không tự chi tiền, đăng quảng cáo, quay/dựng video hoặc lấy số liệu tài khoản quảng cáo theo thời gian thực. Kịch bản là đầu vào sản xuất video, không phải file video thành phẩm.
 
 | Workflow trong `D:\Project\chatdev\yaml_instance` | Mục đích | Lưu ý |
 |---|---|---|
-| `ad_agency_v2.yaml` | Luồng đầy đủ dùng hằng ngày; 29 node, 71 edge, 13 Agent | Có người trả lời brief và duyệt trước bàn giao; dùng file này cho chiến dịch mới |
-| `ad_agency_v2_auto.yaml` | Luồng đầy đủ để thử nghiệm/so sánh tự động | Hai bước Human được thay bằng literal: tự đề nghị dùng giả định và tự gửi lệnh duyệt. Không tương đương đã được khách hàng duyệt |
-| `ad_agency_v2_phase1.yaml` | Bản rút gọn để quan sát các bước đầu | Không có toàn bộ cơ chế kiểm tra và bàn giao của v2; đừng dùng làm tiêu chuẩn nghiệm thu bản đầy đủ |
+| `ad_agency_v2.yaml` | Luồng đầy đủ dùng hằng ngày; 33 node, 77 edge, 15 Agent | Có người trả lời brief, duyệt kế hoạch và node Python Banner_Producer; dùng file này cho chiến dịch mới |
+| `ad_agency_v2_auto.yaml` | Luồng đầy đủ để thử nghiệm/so sánh tự động | Brief_Clarification dùng literal; Client_Review vẫn là Human. Ảnh tắt mặc định; không tự phê duyệt đầu ra cuối |
 
 Các YAML là đồ thị chạy. Source Python trong dự án cung cấp runtime, tool, Router và bộ kiểm tra dữ liệu. Chép riêng YAML sang một bản ChatDev chưa có các hàm tùy chỉnh sẽ không đủ để chạy giống dự án này.
 
@@ -50,7 +51,7 @@ Các YAML là đồ thị chạy. Source Python trong dự án cung cấp runtim
 | Model endpoint | 9Router hoặc gateway tương thích mà bạn đang sử dụng; cần model hỗ trợ gọi tool |
 | Trình duyệt | Chrome/Edge để mở frontend |
 
-Docker không phải điều kiện bắt buộc cho cách chạy local dưới đây. Hai node Python của workflow này chạy trên máy backend khi đã bật quyền; chúng không tự được đưa vào Docker sandbox.
+Docker không phải điều kiện bắt buộc cho cách chạy local dưới đây. Ba node Python (`Plan_Gate`, `Banner_Producer`, `Build_Files`) của workflow này chạy trên máy backend khi đã bật quyền; chúng không tự được đưa vào Docker sandbox.
 
 Kiểm tra công cụ trong PowerShell:
 
@@ -199,6 +200,21 @@ Mở địa chỉ Vite in trong terminal, thường là `http://127.0.0.1:5173`.
 
 Để kiểm tra frontend mới, tải lại trang khi phù hợp; không bấm Relaunch chỉ để nhìn thay đổi CSS. Relaunch có thể tạo lượt chạy và gọi lại model.
 
+### 4.3A. Cấu hình YAML khác bố cục canvas như thế nào?
+
+Editor lưu hai phần riêng:
+
+| Phần | Nơi lưu mặc định | Có đi theo Git hiện tại? |
+|---|---|---|
+| Node, model, prompt, tools, skills, cạnh và điều kiện chạy | `yaml_instance/<workflow>.yaml` | Có, khi add/commit file YAML |
+| Tọa độ node, viewport/zoom của canvas | SQLite `data/vuegraphs.db` | Không, `data/` đang bị `.gitignore` loại |
+
+Backend có thể dùng database khác qua `VUEGRAPHS_DB_PATH`. Editor đọc bố cục bằng `GET /api/vuegraphs/<tên_workflow_không_đuôi_yaml>`, sau đó đồng bộ dữ liệu node/edge từ YAML. Khi chưa có bố cục đã lưu, frontend sinh bố cục tự động.
+
+**Đổi thứ tự node trong YAML không di chuyển các node đã có tọa độ trong database.** Để sửa hình vẽ, kéo node trên canvas rồi Save; để lấy lại bố cục vừa cập nhật từ server, F5 hoặc mở lại workflow. Lưu bản editor cũ sau khi sửa bên ngoài có thể ghi đè thay đổi mới. Đổi bố cục không cần Relaunch chiến dịch.
+
+Bố cục v2 hiện dùng tọa độ của 27 node chung trong bản v2-auto đã lưu. Con số 27 gồm node bắt đầu ảo `__start` của canvas; YAML có 33 node nghiệp vụ, canvas có thể hiển thị 34 node. Bảy node bổ sung (`Brief_Router`, `QA_Router`, `Review_Router`, `Plan_Router`, `Publication_Editor`, `Publication_QA`, `Banner_Producer`) được xếp vào khoảng trống; khác biệt về node/nhánh vẫn được giữ. Khi clone repo sang máy khác, database local không tự đi theo; mục 19.3 hướng dẫn mang riêng tọa độ lên Git mà không chép cấu hình node.
+
 ### 4.4. Prompt thử ngắn
 
 ```text
@@ -212,7 +228,7 @@ Lập kế hoạch Facebook cho quán cà phê Mây tại Cầu Giấy, Hà Nộ
 | Thành phần | Cách dùng |
 |---|---|
 | Chat | Xem kết quả, file đính kèm, lỗi và phản hồi Human theo thời gian |
-| Graph | Xem node đang chạy và quan hệ kết nối; panel chat bên trái có thể thu gọn |
+| Graph | Xem node đang chạy; kéo mép phải panel chat để đổi chiều rộng, hoặc thu gọn panel |
 | Show More / Show Less | Mở/thu nội dung dài; code và bảng rộng cuộn ngang bên trong tin nhắn |
 | Download trên thẻ file | Tải thêm một bản về thư mục tải xuống của trình duyệt |
 | Status | Phân biệt đang chạy, chờ bạn, hoàn thành hoặc thất bại |
@@ -227,7 +243,7 @@ Chỉ nhìn thấy một file hoặc một node hoàn thành chưa chứng minh 
 
 **Tool thực hiện thao tác**, ví dụ đọc/ghi file hoặc tìm web. **Skill hướng dẫn cách làm nghiệp vụ**, ví dụ kiểm tra claim hay phân bổ ngân sách. Gắn skill không tự cấp khả năng ghi file hoặc tìm kiếm.
 
-### 5.2. Ba tool file cho cả 13 Agent
+### 5.2. Ba tool file cho cả 15 Agent
 
 | Tool | Làm gì? | Ví dụ tham số khi model gọi |
 |---|---|---|
@@ -235,7 +251,7 @@ Chỉ nhìn thấy một file hoặc một node hoàn thành chưa chứng minh 
 | `load_file` | Đọc file nguồn/kiểm lại file vừa ghi | `path_or_id: artifacts/campaign_brief.json` |
 | `save_file` | Ghi file thật và trả thông tin file | `path`, `content`, tùy chọn `encoding`, `mode` |
 
-Ví dụ yêu cầu ghi CSV: `path=artifacts/media_plan.csv`, `encoding=utf-8-sig`, `mode=overwrite`. Nội dung truyền vào phải là CSV thật; không chèn hàng rào Markdown vào file.
+Ví dụ yêu cầu ghi CSV: `path=artifacts/media_plan.csv`, `encoding=utf-8-sig`, `mode=overwrite`. Ưu tiên truyền `content` là chuỗi JSON chứa `columns` và `rows` để Python xuất CSV đúng quote/BOM (mục 18.6). CSV văn bản vẫn được hỗ trợ; không chèn hàng rào Markdown vào file.
 
 Không cần cấp `file:All` hoặc công cụ xóa/chạy lệnh cho mọi Agent. Các tool file được giới hạn trong workspace của phiên; vai trò và danh sách file phải ghi vẫn cần nêu rõ trong prompt. Có `save_file` không đồng nghĩa đã có cơ chế phân quyền ghi riêng từng Agent ở cấp hệ điều hành.
 
@@ -284,7 +300,7 @@ Trong Chat có dòng Tool `save_file`, thẻ Download và file xuất hiện tro
 
 ### 6.1. Skill nằm ở đâu?
 
-Skill nghiệp vụ của dự án nằm trong `D:\Project\chatdev\.agents\skills`. Có **18 skill quảng cáo**: 13 skill vai trò và 5 skill bổ sung. Thư mục còn có thể có skill mẫu khác; không cần gắn tất cả.
+Skill nghiệp vụ của dự án nằm trong `D:\Project\chatdev\.agents\skills`. Có **19 skill quảng cáo**: 13 skill vai trò ban đầu, 5 skill bổ sung và `ad-publication-quality-review` dành riêng cho QA nội dung công khai. Thư mục còn có thể có skill mẫu khác; không cần gắn tất cả.
 
 Ví dụ cấu trúc:
 
@@ -365,13 +381,18 @@ flowchart TD
     S --> M[Media / Creative / Performance]
     M --> J[Plan_Join]
     J --> A[Plan_Assembler]
-    A --> G[Plan_Gate_Script → Plan_Gate]
+    A --> G[Plan_Gate_Script → Plan_Gate → Plan_Router]
     G -->|OK| Q[Strategy_QA → QA_Router]
     G -->|ISSUES| A
     Q -->|PASS| C[Client_Review → Review_Router]
     Q -->|REVISE| A
     C -->|REVISE| A
-    C -->|APPROVE| D[Delivery_Packager]
+    C -->|APPROVE + ủy quyền đầu ra cuối| PE[Publication_Editor]
+    PE --> PQ[Publication_QA]
+    PQ -->|PASS| BP[Banner_Producer]
+    PQ -->|BLOCKED| X
+    BP -->|Kiểm tra + đóng dấu bản cuối| D[Delivery_Packager]
+    BP -->|Lỗi| X[Blocked_Output]
     D --> F[Build_Script → Build_Files]
     F -->|OK| O[Delivery]
     G -->|ERROR| X[Blocked_Output]
@@ -383,7 +404,7 @@ flowchart TD
 Không cần thêm một Agent PM để chọn từng bước: đồ thị và Router đang đảm nhiệm điều phối; `Strategy_QA` kiểm chuyên môn, còn bạn duyệt tại `Client_Review`.
 
 <a id="8-agents"></a>
-## 8. Giải thích 13 node Agent
+## 8. Giải thích 15 node Agent
 
 Mọi đường dẫn dưới đây bắt đầu từ `artifacts/` trong **workspace phiên chạy**, không phải thư mục `yaml_instance` hoặc thư mục skill. Cột “Đầu vào” là nguồn phải sử dụng; không phải mọi file đều được edge chép nguyên văn vào Chat. Agent có thể phải dùng `load_file` để đọc.
 
@@ -400,8 +421,10 @@ Mọi đường dẫn dưới đây bắt đầu từ `artifacts/` trong **works
 | `Creative_Director` | Chiến lược, định vị, insight, bằng chứng | Concept, thông điệp, hook, CTA, yêu cầu asset và biến thể | `creative_brief.md`, `creative_matrix.csv` |
 | `Performance_Analyst` | Chiến lược, mục tiêu, ràng buộc đo lường | KPI, tracking, thử nghiệm và quy tắc ra quyết định | `measurement_plan.md`, `experiment_plan.csv` |
 | `Plan_Assembler` | Các kế hoạch hiện hành, brief/chiến lược, lỗi/góp ý | Tổng hợp kế hoạch; trong rework sửa cả file bảng và thuyết minh thuộc phạm vi | `advertising_strategy_draft.md`, `execution_calendar.csv` |
-| `Strategy_QA` | Bản nháp, file nguồn, kết quả Plan_Gate và plan_version | Đánh giá nhất quán, bằng chứng, ngân sách khả thi, tracking, tính triển khai | `qa_report.json` và quyết định cuối `QA: PASS` hoặc `QA: REVISE` |
-| `Delivery_Packager` | Bản được duyệt, QA PASS, lệnh duyệt của bạn | Ghi chú bàn giao, hạn chế còn mở, cách sử dụng | `handoff_notes.md` |
+| `Strategy_QA` | Bản nháp, file nguồn, kết quả Plan_Gate và plan_version | Đánh giá nhất quán, bằng chứng, ngân sách khả thi, tracking, tính triển khai | `qa_report.json`; code tạo quyết định điều phối từ verdict đã kiểm tra |
+| `Publication_Editor` | Kế hoạch/snapshot đã duyệt, bộ ID, nguồn và ủy quyền Human | Biên tập copy công khai, kịch bản, brief banner và lịch đăng | `publication_content.json` |
+| `Publication_QA` | Bộ copy hiện hành, nguồn snapshot và JSON mẫu đúng phiên bản | Kiểm đủ tám tiêu chí nội dung công khai, gắn hash đúng bộ copy | `publication_qa.json` |
+| `Delivery_Packager` | Kế hoạch được duyệt, bộ xuất bản đã QA và đóng dấu bản cuối | Ghi chú bàn giao, hạn chế còn mở, cách sử dụng | `handoff_notes.md` |
 
 ### 8.1. Các điểm hay nhầm
 
@@ -413,11 +436,11 @@ Mọi đường dẫn dưới đây bắt đầu từ `artifacts/` trong **works
 - **Creative:** đề xuất nội dung và yêu cầu asset; không được coi ảnh/video là đã được sản xuất chỉ từ mô tả.
 - **Performance:** mẫu thử nhỏ có thể chỉ đủ quan sát vận hành, không tự chứng minh hiệu quả thống kê hoặc nhân quả.
 - **Assembler:** sửa Markdown mà bỏ nguyên CSV sai sẽ khiến Gate tiếp tục từ chối. File hiện hành là nguồn đúng; message cũ chỉ là tham chiếu.
-- **QA:** PASS nghĩa là bản kế hoạch đủ điều kiện theo tiêu chí kiểm tra, không bảo đảm quảng cáo sẽ sinh lời. JSON và dòng quyết định phải thống nhất và cùng phiên bản.
+- **QA:** PASS nghĩa là bản kế hoạch đủ điều kiện theo tiêu chí kiểm tra, không bảo đảm quảng cáo sẽ sinh lời. Quyết định lấy từ `verdict` trong JSON đã kiểm schema, phiên bản và hash file; chat không phải nguồn quyết định.
 - **Packager:** không chép lại/viết lại toàn bộ chiến lược đã duyệt. Script chịu trách nhiệm sao chép và manifest.
 
 <a id="9-dieu-phoi"></a>
-## 9. Giải thích 16 node điều phối
+## 9. Giải thích 18 node điều phối
 
 Các node sau không gọi LLM. Đừng gắn model, skill hoặc tool ghi file cho chúng chỉ vì tên có chữ “Plan” hay “Review”.
 
@@ -430,11 +453,13 @@ Các node sau không gọi LLM. Đừng gắn model, skill hoặc tool ghi file 
 | `Plan_Join` | passthrough | Gom bàn giao Media/Creative/Performance; không chỉ lấy message cuối | Truyền tới Assembler; không tự chứng nhận đủ file/hợp lệ |
 | `Plan_Gate_Script` | literal | Phát Python code kiểm tra đã lưu trong YAML | Gửi code cho Plan_Gate; thấy code trong Chat ở đây là bình thường |
 | `Plan_Gate` | python | Đọc file thật, kiểm bảng/ngân sách/ID/ngày; chụp snapshot khi đạt | `PLAN: OK`, `PLAN: ISSUES` hoặc `PLAN: ERROR`; timeout hiện 60 giây |
+| `Plan_Router` | passthrough | Phân loại kết quả Gate bằng `ad_plan_classify` đúng một lần | OK tới QA; lỗi sửa được đi rework; lỗi nguồn hoặc lặp nguyên lỗi tới Blocked |
 | `QA_Router` | passthrough | Nhận quyết định QA đã qua `ad_qa_route` | PASS tới Human; REVISE về sửa; sai/mất trạng thái tới Blocked |
 | `Client_Review` | human | Cho bạn xem bản nháp, kết quả Gate/QA và phiên bản | Chờ lệnh `HUMAN: APPROVE` hoặc `HUMAN: REVISE` kèm góp ý |
-| `Review_Router` | passthrough | Kiểm lệnh Human bằng `ad_review_route` | APPROVE tới Packager; REVISE về sửa; INVALID tới thông báo lỗi |
+| `Review_Router` | passthrough | Kiểm lệnh Human bằng `ad_review_route` | APPROVE tới Publication_Editor; REVISE về sửa; INVALID tới thông báo lỗi |
 | `Invalid_Review_Notice` | literal | Giải thích cú pháp duyệt không hợp lệ | Chuyển thông báo tới Blocked_Output |
-| `Revision_Limit` | loop_counter | Đếm chung yêu cầu sửa từ Gate/QA/Human | Cho phép 3 lượt sửa; chạm yêu cầu thứ 4 phát giới hạn và kết thúc vòng |
+| `Revision_Limit` | loop_counter | Đếm chung yêu cầu sửa từ Gate/QA/Human | Cho phép 1 lượt sửa; chạm yêu cầu thứ 2 phát giới hạn và kết thúc vòng |
+| `Banner_Producer` | python | Tạo banner qua 9Router khi bật, kiểm PNG/kích thước và lưu manifest | Tắt thì không gọi ảnh; lỗi ảnh đi Blocked, hợp lệ mới đóng dấu bản cuối |
 | `Build_Script` | literal | Phát Python code đóng gói | Gửi code sang Build_Files; đây chưa phải bằng chứng build đã chạy |
 | `Build_Files` | python | Kiểm hash/QA phiên bản, sao chép danh sách trắng, tạo Excel/PPTX/manifest | `BUILD: OK`, `BUILD: BLOCKED` hoặc `BUILD: ERROR`; timeout hiện 180 giây |
 | `Delivery` | passthrough | Nhận kết quả build hợp lệ | Node kết thúc thành công của workflow |
@@ -510,7 +535,7 @@ Không bật thêm ở `Plan_Gate → Client_Review` hoặc `QA_Router → Deliv
 | Assembler/Gate/QA → người duyệt hoặc Packager | Đưa đúng bản nháp, kết quả máy kiểm và QA hiện hành đến nơi sử dụng |
 | Router/Gate/Build → nhánh fallback | Bắt trạng thái thiếu, sai, xung đột; tránh kết thúc im lặng hoặc giao nhầm |
 
-Bảng 71 cạnh ở phụ lục cho biết chính xác cạnh nào bật Trigger, giữ message, dọn context và gọi hàm gì. Đây là bản mô tả để hiểu cấu hình; không cần tự nối lại các cạnh đã có.
+Bảng cạnh ở phụ lục cùng phần Banner_Producer bên dưới cho biết Trigger và processor. Workflow hiện có 77 cạnh; không cần tự nối lại các cạnh đã có.
 
 <a id="11-trang-thai"></a>
 ## 11. Trạng thái, Router và thao tác duyệt
@@ -525,9 +550,9 @@ Bảng 71 cạnh ở phụ lục cho biết chính xác cạnh nào bật Trigge
 | Người duyệt | `HUMAN: APPROVE` / `HUMAN: REVISE` kèm góp ý | `[[REVIEW_APPROVE]]` / `[[REVIEW_REVISE]]` |
 | Build_Files | `BUILD: OK` / `BUILD: BLOCKED` / `BUILD: ERROR` | `[[BUILD_OK]]` / `[[BUILD_BLOCKED]]` / `[[BUILD_ERROR]]` |
 
-Brief và QA phải có **đúng một dòng quyết định riêng ở cuối message**, ngoài code fence. Các câu “Ví dụ lệnh là QA: PASS” hoặc “Không được kết luận QA: PASS” không phải quyết định hợp lệ. Sau dòng cuối không viết thêm phần giải thích. Agent không tự phát token hai ngoặc; Router phát token sau khi kiểm tra. Với Plan/Build, script phát token theo kết quả code.
+Brief phải có **đúng một dòng quyết định riêng ở cuối message**, ngoài code fence. Các câu “Ví dụ lệnh là QA: PASS” hoặc “Không được kết luận QA: PASS” không phải quyết định hợp lệ. Sau dòng cuối không viết thêm phần giải thích. Agent không tự phát token hai ngoặc; Router phát token sau khi kiểm tra. Với Plan/Build, script phát token theo kết quả code.
 
-Các trạng thái như `QA: BLOCKED`, `BRIEF: BLOCKED` không thuộc bộ trạng thái hợp lệ của Router này. Nếu xuất hiện, luồng sẽ đi hướng không hợp lệ/bị chặn; đừng thêm chúng vào cạnh thành công để cố cho chạy tiếp.
+`QA: BLOCKED` được dùng khi báo cáo QA 2.0 kết luận không thể xử lý trong vòng tổng hợp. Runtime kiểm báo cáo/quyết định rồi Router đưa qua đường dự phòng `QA_INVALID` tới Blocked_Output; không coi đó là PASS hoặc REVISE. `BRIEF: BLOCKED` không thuộc trạng thái Brief hợp lệ. Đừng thêm các trạng thái dừng vào cạnh thành công để cố cho chạy tiếp.
 
 ### 11.2. Khi Brief hỏi lại
 
@@ -541,7 +566,7 @@ Câu trả lời quay lại Director_Brief để hợp nhất. Không cần vi�
 
 ### 11.3. Khi đến Client_Review
 
-Kiểm tra bản nháp, ngân sách, giới hạn bằng chứng, QA và `plan_version`. Chỉ dùng một trong hai cú pháp:
+Kiểm tra kế hoạch, ngân sách, giới hạn bằng chứng, QA và `plan_version`. `HUMAN: APPROVE` duyệt kế hoạch và ủy quyền hoàn thiện toàn bộ bài đăng, kịch bản, banner và file cuối theo kế hoạch này. Không có bước hỏi duyệt thứ hai. Chỉ dùng một trong hai cú pháp:
 
 **Duyệt:** đúng một dòng, không thêm “ok”, dấu chấm, code fence hoặc lời giải thích:
 
@@ -595,7 +620,7 @@ scenario,channel,budget_amount,metric,metric_value,formula,assumption,estimate_s
 concept_id,segment_id,insight,hook,benefit,proof,cta,format,asset_requirement,test_variant
 
 # experiment_plan.csv
-test_id,hypothesis,variant_a,variant_b,primary_metric,min_sample,duration_days,decision_rule
+test_id,hypothesis,variant_a,variant_b,primary_metric,min_sample,duration_days,decision_rule,test_type,sample_unit,sample_basis,data_source,business_kpi,decision_supported,decision_not_supported,decision_owner,prerequisites,missing_data_rule,start,end
 
 # execution_calendar.csv
 week,start,end,channel,activity,owner,deliverable
@@ -632,6 +657,57 @@ Gate ghi các dòng chưa ước lượng trong `info.unestimated_metrics`; Exce
 
 **Tại Plan_Gate:** kiểm dữ liệu liên quan giữa các file, số học, ngân sách, ID và ngày. `ISSUES` là dữ liệu có thể yêu cầu sửa; `ERROR` dành cho thiếu đầu vào bắt buộc hoặc lỗi khiến không thể kiểm tiếp. Gate không thay thế đánh giá chất lượng chuyên môn của QA.
 
+### 12.4A. Tiêu chuẩn tài liệu bàn giao và bằng chứng
+
+- File làm việc vẫn mang tên `artifacts/advertising_strategy_draft.md`, nhưng dùng tiêu đề trung tính như “Kế hoạch quảng cáo — Mây”. Không chèn “bản nháp rework chờ QA” vào tên kế hoạch rồi mang nguyên sang bộ giao.
+- Receipt bàn giao giữa Agent, `FILE ĐÃ ĐỔI` và nhật ký rework nằm trong `code_workspace/internal/assembly_notes.md`; không nằm trong bản kế hoạch khách hàng và không được đóng gói. Ghi chú nội bộ không thay thế nguồn bằng chứng hoặc manifest phiên bản.
+- Trong nội dung dành cho người nhận dùng tên giao như `advertising_strategy.md`, `media_plan.csv`, không dùng đường dẫn máy chủ hoặc `artifacts/advertising_strategy_draft.md`. Khi gọi tool Agent vẫn phải dùng đường dẫn workspace thực tế.
+- Gate đưa lỗi tiêu đề, ghi chú nội bộ lẫn vào kế hoạch, tham chiếu nội bộ/không có trong bộ giao, ID nguồn trùng và bản ghi external thiếu URL/ngày truy cập vào `PLAN: ISSUES`. Build kiểm lại kế hoạch và handoff trước sao chép, không sửa nội dung đã khóa hash để làm đẹp bản giao.
+- Bộ kiểm bằng code chỉ kiểm được cấu trúc nguồn và tài liệu. Nó không xác minh URL đã thực sự được đọc hay claim có được nguồn chứng minh đúng nghĩa hay không. Không coi Gate OK là chứng nhận bằng chứng.
+- QA phải đọc chéo brief, nghiên cứu, định vị, chiến lược, Evidence và các kế hoạch. Claim thiếu căn cứ vẫn còn trong tài liệu nguồn phải được báo lỗi ngay cả khi bản tổng hợp đã bỏ nó. Phân biệt giả thuyết được nêu trung thực với dữ kiện bị gắn nhãn sai.
+- Brief giả định không chứng minh thực địa; lời người dùng cung cấp không tự chứng minh sức chi trả, lợi thế cạnh tranh hoặc chất lượng tiện ích. Với claim quan trọng cần chỉ ra nguồn/file/đoạn, phạm vi và giới hạn.
+- Assembler sửa trong phạm vi đã giao; không viết lại brief/nghiên cứu/Evidence để che lỗi. Nếu phải có nguồn mới ngoài quyền sửa, báo cần chủ nguồn xử lý, không tự bịa để kết thúc vòng.
+
+Preflight đối chiếu hàm chính sách trong `utils/ad_delivery_policy.py`, hợp đồng trong `utils/ad_review_contracts.py` và bộ xuất trong `utils/ad_delivery_assets.py` với bản nhúng của Gate/Build để phát hiện lệch bản trước Launch. Main được kiểm mặc định; thêm --auto khi cần kiểm cả bản auto.
+
+### 12.4B. Hợp đồng thử nghiệm v2
+
+`experiment_plan.csv` hiện có 20 cột. Tám cột cũ được giữ nguyên vị trí, 12 cột mới thể hiện mục đích, dữ liệu và giới hạn quyết định. Main/auto mới yêu cầu đủ schema này; không âm thầm biến bảng cũ thành thử nghiệm đã đủ căn cứ.
+
+| Trường | Ý nghĩa |
+|---|---|
+| `test_type` | TECHNICAL_CHECK: kiểm phân phối/ghi nhận; CREATIVE_EXPLORATION: thăm dò nội dung; BUSINESS_EVALUATION: đánh giá kết quả kinh doanh |
+| `sample_unit`, `sample_basis` | Mẫu đếm gì, cơ sở/ngữ cảnh của min_sample; không gọi ngưỡng kiểm phân phối là cỡ mẫu thống kê |
+| `data_source`, `business_kpi` | Nguồn dữ liệu dự kiến/thực có và mối liên hệ với mục tiêu; click/tương tác không tự thành lượt ghé |
+| `decision_supported`, `decision_not_supported` | Quyết định dữ liệu có thể hỗ trợ và những điều không thể kết luận |
+| `decision_owner`, `prerequisites` | Người có quyền quyết định và điều kiện phải đạt trước khi chạy |
+| `missing_data_rule` | Xử lý thiếu mẫu, lỗi tracking, dữ liệu mâu thuẫn/trễ lịch; không coi thiếu dữ liệu là không có khách |
+| `start`, `end` | Ngày YYYY-MM-DD trong campaign, khớp duration_days theo số ngày bao gồm cả hai đầu |
+
+Không bắt buộc tạo cả ba loại test hoặc tăng số test vượt brief. Kiểm tra tracking kỹ thuật có thể là checklist chuẩn bị. Khi chưa có baseline/cơ sở cỡ mẫu, giới hạn kết luận ở thăm dò và lập việc thu dữ liệu cho vòng tiếp theo; không thêm benchmark hoặc tỷ lệ chuyển đổi giả để điền cho đủ.
+
+### 12.4C. QA 2.0: kế hoạch đạt khác với sẵn sàng chạy
+
+Báo cáo `qa_report.json` mới bắt buộc `schema_version: "2.0"`, các trường phiên bản/verdict/Gate/issues cũ và:
+
+- `review_summary`: kết luận và giới hạn quan trọng.
+- `criteria_results`: đúng 8 tiêu chí BRIEF_ALIGNMENT, EVIDENCE, CROSS_FILE_CONSISTENCY, BUDGET, EXPERIMENTS, MEASUREMENT, DELIVERY, IMPLEMENTATION_CONDITIONS. Mỗi mục có status PASS/FAIL/NOT_REVIEWED, rationale, evidence_refs trỏ file nguồn snapshot cùng vị trí/mục/dòng.
+- `open_assumptions`: các giả định còn mở, tác động, người phụ trách và căn cứ; danh sách có thể rỗng.
+- `prelaunch_conditions`: đúng 5 nhóm TRACKING, ASSETS, ACCOUNT_SETUP, OFFER_CLAIMS, OPERATIONS. Mỗi nhóm có status PENDING/VERIFIED/BLOCKED/NOT_APPLICABLE, description, owner, verification và evidence_refs. Một bản hướng dẫn cài tracking không chứng minh tracking đã được cài.
+- `implementation_readiness`: status và reason theo bảng dưới.
+
+| Trường hợp | Mức sẵn sàng |
+|---|---|
+| Verdict chưa PASS hoặc có điều kiện BLOCKED | NOT_READY |
+| Kế hoạch PASS, không có BLOCKED nhưng còn PENDING | CONDITIONAL |
+| Kế hoạch PASS, mọi điều kiện VERIFIED/NOT_APPLICABLE có giải thích | READY |
+
+PASS cần cả 8 tiêu chí PASS và không còn issue. REVISE/BLOCKED cần issue cụ thể cùng tiêu chí không đạt/chưa review. QA chỉ trỏ bằng chứng trong bộ nguồn đã được Gate chụp; không dùng nhật ký nội bộ làm chứng nhận. Code kiểm cấu trúc/nhất quán, không tự xác minh ý nghĩa claim hay thao tác thực địa.
+
+Build vẫn có thể bàn giao kế hoạch PASS đang CONDITIONAL hoặc NOT_READY; đó là hồ sơ để chuẩn bị triển khai, không phải lệnh chạy quảng cáo. Manifest giữ thêm qa_schema_version, qa_verdict, implementation_readiness và prelaunch_conditions. Handoff phải nêu riêng chất lượng kế hoạch, mức sẵn sàng và người xử lý điều kiện còn mở. Build tạo thêm 3 mẫu vận hành; hồ sơ này nằm ở `output/internal/`, còn bài/ảnh cuối nằm ở `output/publish/`. Số file thay đổi theo bộ nội dung; đối chiếu manifest thay vì đếm cố định.
+
+Output cũ không được sửa hoặc tự nâng hạng thành QA 2.0. Khi tiếp tục một phiên cũ, tạo lại recovery từ template main/auto mới; Agent có bảng thiếu schema sẽ cần tạo lại bàn giao tương ứng, QA phải review lại phiên bản mới. Không chạy nguyên YAML recovery cũ rồi kỳ vọng prompt/schema tự cập nhật.
+
 ### 12.5. Snapshot, hash và plan_version
 
 1. Khi Gate đạt, tính SHA-256 cho bộ 18 file nguồn và tạo `plan_version` từ các hash.
@@ -647,13 +723,13 @@ Gate ghi các dòng chưa ước lượng trong `info.unestimated_metrics`; Exce
 
 ### 13.1. Vòng sửa nghiệp vụ
 
-Ba nguồn yêu cầu sửa là Gate ISSUES, QA REVISE và Human REVISE. Chúng chuyển lỗi/góp ý về `Plan_Assembler` và tăng chung `Revision_Limit`. Cấu hình hiện cho phép **3 lượt sửa** sau lần tổng hợp đầu; yêu cầu sửa thứ 4 kết thúc theo giới hạn.
+Ba nguồn yêu cầu sửa là Gate ISSUES, QA REVISE và Human REVISE. Chúng chuyển lỗi/góp ý về `Plan_Assembler` và tăng chung `Revision_Limit`. Cấu hình hiện cho phép **1 lượt sửa** sau lần tổng hợp đầu (`max_iterations: 2`); yêu cầu sửa thứ 2 kết thúc theo giới hạn. Như vậy `Plan_Assembler` có tối đa 2 lượt nghiệp vụ: tổng hợp lần đầu và sửa một lần. Giới hạn này đếm chung Gate/QA/Human; không phải số lần gọi model hoặc retry tool trong mỗi lượt. Thay đổi YAML chỉ áp dụng khi nạp cấu hình cho phiên mới, không cập nhật phiên đang chạy.
 
 Assembler đọc file hiện hành, sửa đúng bảng/thuyết minh rồi Gate kiểm lại. Nếu Gate OK thì QA chạy lại; nếu QA PASS thì bạn duyệt lại. Các planner không tự được chạy lại chỉ vì Assembler nhận lỗi. Nếu phải nghiên cứu lại căn bản hoặc đổi chiến lược, đó có thể là một phiên kế hoạch mới.
 
 `Revision_Limit` không phải cổng duy nhất mà mọi cạnh sửa phải đi xuyên qua: đồ thị còn có cạnh trực tiếp về Assembler, và bộ đếm kết thúc vòng theo cơ chế runtime. Không tự xóa một cạnh ra của bộ đếm vì nghĩ bị trùng; sửa vòng cần kiểm hành vi engine riêng.
 
-Vòng hỏi brief và retry request model khác với vòng sửa kế hoạch. Retry hiện cấu hình tối đa 2 attempt cho Agent và không tự retry `ProviderResponseError`; không nên tăng retry vô hạn để che lỗi định dạng provider.
+Vòng hỏi brief và retry request model khác với vòng sửa kế hoạch. Retry model hiện tối đa 2 attempt cho Agent. Bootstrap cho phép thử lại riêng `malformed_function_call` tối đa một lần khi retry đang bật; các `ProviderResponseError` khác vẫn theo danh sách loại trừ. Đây không phải lượt sửa kế hoạch; xem mục 15.
 
 ### 13.2. Muốn bổ sung khi workflow đang chạy
 
@@ -687,7 +763,9 @@ Recovery không bảo đảm dùng lại được mọi phiên lỗi; thiếu lo
 <a id="14-ket-qua"></a>
 ## 14. Kết quả cuối cùng và cách đọc
 
-Build thành công tạo **23 file** trong `code_workspace/output/`: 18 file nguồn đã qua kiểm tra, 2 file QA/ghi chú và 3 file tạo thêm. Trong bộ giao, `advertising_strategy_draft.md` được đổi tên thành `advertising_strategy.md`.
+Build thành công tạo bộ bàn giao trong `WareHouse/session_<id>/code_workspace/output/`. Đọc `output/README.md` trước: **`publish/` chứa nội dung dùng để đăng, `production/` chứa kịch bản để sản xuất, `internal/` chứa hồ sơ kế hoạch và kiểm tra**. Bản `advertising_strategy_draft.md` được xuất thành `internal/advertising_strategy.md`. Không suy ra trạng thái bộ xuất bản cuối từ tên bản nháp trong artifacts.
+
+Số file phụ thuộc số bài, kịch bản và việc bật ảnh; không áp con số 26/29 file của luồng cũ. Đối chiếu `output/manifest.json` và `output/internal/publication_manifest.json` của đúng phiên. Bảng dưới liệt kê hồ sơ **nội bộ** trong `output/internal/`; file công khai xem mục 18.1.
 
 | Nhóm | File |
 |---|---|
@@ -701,10 +779,17 @@ Build thành công tạo **23 file** trong `code_workspace/output/`: 18 file ngu
 | Lịch | `execution_calendar.csv` |
 | QA và ghi chú | `qa_report.json`, `handoff_notes.md` |
 | File sinh bởi script | `Campaign_Plan.xlsx`, `Campaign_Presentation.pptx`, `manifest.json` |
+| Mẫu vận hành sinh bởi script | `visit_log_template.csv`, `daily_report_template.csv`, `prelaunch_checklist.csv` |
 
-Excel có 6 sheet: Media_Plan, Budget_Scenarios, Creative_Matrix, Experiments, Calendar, Sources. PowerPoint là bản tóm tắt theo mục `##`, giới hạn nội dung mỗi mục; chưa phải slide được thiết kế đầy đủ về thương hiệu và trình bày.
+Excel có **10 sheet**: Overview, Media_Plan, Budget_Scenarios, Creative_Matrix, Experiments, Calendar, Sources, Visit_Log, Daily_Report, Prelaunch_Checklist. Overview nêu phiên bản, QA, mức sẵn sàng và cách đọc. Các bảng có bộ lọc, cố định hàng tiêu đề, xuống dòng và định dạng số/ngày/phần trăm; dự báo chưa có dữ liệu vẫn để trống. Visit_Log và Daily_Report có các hàng trống để nhập liệu, không chứa kết quả chiến dịch giả.
 
-Thứ tự đọc đề xuất: **handoff_notes → advertising_strategy → media/budget → creative → measurement/experiments → calendar → evidence/sources**. Khi cần xác minh phiên bản, đọc QA và manifest.
+`visit_log_template.csv` và `daily_report_template.csv` chỉ có tiêu đề: đây là mẫu nhập số liệu thực tế, được phép trống khác với CSV kế hoạch của Agent. Chọn đơn vị ghi nhận phù hợp chiến dịch trước khi dùng; không cộng các nhóm nguồn chồng lấp hoặc thu thập thông tin cá nhân không cần thiết. `prelaunch_checklist.csv` giữ nguyên 5 điều kiện QA cùng người phụ trách, cách xác minh và trạng thái hiện hành; xuất file không đồng nghĩa điều kiện đã hoàn thành. Sao chép workbook/mẫu sang bản làm việc trước khi nhập thực tế để giữ nguyên bộ bàn giao được đóng hash.
+
+PowerPoint dùng khổ 16:9, chữ và bảng có thể sửa trực tiếp. Nội dung theo mục `##` được phân trang theo độ dài, bảng Markdown chuyển thành bảng slide; không còn cắt tùy ý ở 6 dòng hoặc 140 ký tự. Đây là bản trình bày kế hoạch, chưa tự tạo bộ nhận diện thương hiệu, hình quảng cáo hay biểu đồ từ dữ liệu không có. Kiểm tra lại trong PowerPoint/Excel trên máy dùng thực tế vì font và cách dàn trang có thể khác môi trường kiểm thử.
+
+Manifest ghi hash file bàn giao và thông tin các mẫu vận hành. Đối chiếu thêm `internal/publication_manifest.json` để kiểm trạng thái bản cuối và hash nội dung công khai. Các mẫu sinh thêm không thay thế 18 file nguồn bắt buộc hoặc bằng chứng nghiệm thu.
+
+Để dùng nội dung: **README → publish/content_calendar.csv → publish/posts và publish/banners → production/video_scripts**. Để xem cơ sở kế hoạch: **internal/handoff_notes → advertising_strategy → media/budget → creative → measurement/experiments → calendar → evidence/sources**. Khi cần xác minh phiên bản, đọc QA và manifest.
 
 Một thư mục `output/` tồn tại chưa đủ chứng minh lần build mới thành công: có thể là đầu ra trước hoặc build dở. Kiểm trạng thái Build, manifest và đúng session. `provider_*.json` trong diagnostics là file chẩn đoán, không phải hồ sơ quảng cáo để giao khách hàng.
 
@@ -718,10 +803,10 @@ Một thư mục `output/` tồn tại chưa đủ chứng minh lần build mớ
 | WinError 10013 / lỗi bind cổng | Kiểm dịch vụ đang nghe bằng `Get-NetTCPConnection -LocalPort 6400 -State Listen`; nếu chưa có thì kiểm cổng dành riêng/quyền hệ thống. Không tự kill mọi Python hoặc mở nhiều backend |
 | `response_format_mismatch`, yêu cầu Responses JSON | Kiểm `protocol: chat` ở đúng Agent và đúng YAML đang chạy; xác nhận endpoint tương thích Chat |
 | `unexpected keyword argument 'protocol'` | Kiểm adapter đang chạy đúng bản của dự án và xử lý tham số nội bộ; không phải lỗi đề bài quảng cáo |
-| `malformed_function_call` | Provider/gateway trả lời gọi hàm không hợp lệ. Đọc node/model/finish_reason trong diagnostic; đừng kết luận ngay do CSV hoặc do mọi model của một hãng đều lỗi |
+| `malformed_function_call` | Provider/gateway trả lời gọi hàm không hợp lệ. Bootstrap quảng cáo bật thử lại tối đa 1 lần tại lượt gọi model lỗi, trong tổng max_attempts của node; không chạy lại node/tool đã hoàn thành. Nếu vẫn lỗi thì dừng, giữ diagnostic và cân nhắc recovery. Không phải mọi lỗi ProviderResponseError đều được retry |
 | `each tool_use must have a single result` | Liên quan lịch sử tool và lớp chuyển đổi provider; giữ log/request diagnostic để đối chiếu, không sửa nội dung skill một cách ngẫu nhiên |
 | Thiếu `sources.csv` hoặc file khác | Kiểm đúng Agent sở hữu, tool save_file thực sự được gọi và đường dẫn. Không bỏ kiểm tra file để cho luồng đi tiếp |
-| CSV chỉ có header / sai số ô | Sửa nội dung CSV theo schema, không chỉ sửa lời bàn giao. Ô có dấu phẩy/xuống dòng cần quote đúng |
+| CSV chỉ có header / sai số ô | save_file từ chối CSV hợp đồng trước khi ghi, báo dòng và số ô cần/có để Agent sửa trong cùng lượt. Giữ nguyên file cũ nếu có; sau hai lần sửa vẫn sai thì dừng. Ô có dấu phẩy/xuống dòng cần quote đúng |
 | `PLAN: ISSUES` | Đọc danh sách lỗi; vòng sửa có thể xử lý. Kiểm số, ID, ngày, ngân sách và trạng thái dự báo |
 | `PLAN: ERROR` | Kiểm thiếu đầu vào bắt buộc hoặc lỗi kiểm tra; không nhất thiết model có thể tự sửa được |
 | `BUILD: BLOCKED` / hash lệch | File đổi sau kiểm/duyệt hoặc QA sai phiên bản; quay lại quy trình kiểm, không chỉnh hash thủ công |
@@ -737,7 +822,25 @@ Một thư mục `output/` tồn tại chưa đủ chứng minh lần build mớ
 4. Sửa đúng lớp, chạy preflight/kiểm tra local phù hợp. Preflight OK chưa chứng minh model đã hoạt động.
 5. Nếu còn file tốt, cân nhắc recovery; đừng Relaunch cả chiến dịch chỉ vì một node dừng ở cuối.
 
+**Phục hồi lỗi gọi hàm:** bootstrap đặt `ad_malformed_retry_limit: 1` trong trạng thái runtime cho workflow quảng cáo. Đây là ngoại lệ có giới hạn cho riêng `malformed_function_call`, dù YAML vẫn loại chung `ProviderResponseError` khỏi retry. Retry phải đang bật và `max_attempts` ít nhất 2; đặt 1 hoặc tắt retry thì không gửi thêm request. Các lỗi schema/đối số tool, sai protocol, kiểm tra artifact và lỗi xác thực không được mở retry bởi ngoại lệ này. Workflow khác không qua bootstrap giữ chính sách cũ.
+
+Runtime gửi lại cùng lịch sử đã hoàn thành, không chèn tool result giả, không phát lại lệnh ghi file, không đổi model hoặc protocol. Phản hồi lỗi được lưu trong `diagnostics/` ngay cả khi thử lại thành công. Mỗi lượt retry có thể tốn token API; số token provider báo vẫn được tính. Đây là khả năng chịu lỗi, không chứng minh đã sửa nguyên nhân bên trong model/gateway. Sau cập nhật cần restart backend; phiên đã dừng không tự tiếp tục, và recovery YAML cũ cần được kiểm tra có gọi bootstrap hiện tại.
+
+**Sửa CSV ngay trong lượt Agent:** bootstrap bật `ad_csv_write_validation` cho 6 CSV hợp đồng trong `artifacts/`: sources, media_plan, budget_scenarios, creative_matrix, experiment_plan và execution_calendar. Schema cột được dùng chung từ `utils/ad_csv.py` với bộ kiểm tra cuối. Tool kiểm UTF-8, header bắt buộc/không trùng, ít nhất một dòng dữ liệu, cú pháp quote và số ô ở từng bản ghi. Khi append, kiểm cả file dự kiến sau khi nối; lỗi không ghi đè hoặc nối vào file cũ. Các mẫu CSV vận hành trống và workflow khác không bật cơ chế này giữ hành vi cũ.
+
+Lỗi được trả qua tool result, ví dụ `record 1, ending line 2: expected 8 cells, received 9`. Agent sửa nội dung rồi gọi lại save_file, không chỉ sửa lời bàn giao. Cho phép lần ghi đầu và tối đa 2 lần sửa bị từ chối cho mỗi file trong lượt Agent; lần bị từ chối thứ 3 dừng trước khi gọi model tiếp. Nếu Agent bỏ qua lỗi và kết thúc, kiểm tra cuối vẫn chặn, kể cả file cũ còn đúng cấu trúc. Ghi lại file hợp lệ mới gỡ trạng thái lỗi. Đây là sửa bằng model nên các lượt sửa có thể tốn token; không tự cắt ô thừa, ghép cột hay bịa dữ liệu. Tool chỉ kiểm cấu trúc CSV, không thay kiểm ngân sách, ID, ngày, ý nghĩa dữ liệu, QA hoặc phê duyệt Human.
+
 ### Giảm chi phí mà vẫn kiểm tra đủ
+
+Workflow main/auto yêu cầu Agent bàn giao ngắn, ưu tiên file đã lưu thay vì dán lại toàn bộ nội dung. Ranh giới đầu vào Agent có tối ưu `file_first_v1`: chỉ thay phần nội dung file được chép nguyên văn bằng đường dẫn khi hash còn khớp bản đã xác nhận, hoặc bỏ message trùng hoàn toàn cùng metadata. Cảnh báo và yêu cầu bao quanh vẫn giữ; Brief, QA, Human, quyết định và lịch sử tool đang chạy không bị rút gọn. Nếu file đổi, mất hoặc không đọc được, giữ nội dung đầu vào. Đây không phải bộ nhớ cache bỏ qua việc đọc bản file mới.
+
+`token_usage_*.json` bổ sung `model_call_count` và `context_optimizations`. Số ký tự trước/sau chỉ đo lượng văn bản ở đầu vào; số token sử dụng vẫn lấy từ provider, không quy đổi ký tự thành chi phí. Tổng độ dài role prompt giảm từ 64.272 xuống 54.349 ký tự trong lần chỉnh này; chưa chứng minh mức tiết kiệm token khi chạy thật. So sánh hai phiên có cùng brief, model, cấu hình và kết quả review bằng lệnh:
+
+```powershell
+uv run python tools/compare_ad_runs.py --before "duong-dan/token_usage-phien-cu.json" --after "duong-dan/token_usage-phien-moi.json"
+```
+
+Công cụ chỉ đọc JSON, không gọi model. Đánh giá chất lượng và số vòng sửa cùng với token; phiên bị dừng sớm không phải bằng chứng tiết kiệm cho một kết quả hoàn chỉnh.
 
 - Brief đủ ngân sách, ngày, kênh và giới hạn giúp giảm hỏi lại.
 - Khi chỉ thử lưu file, yêu cầu nội dung ngắn, một kênh, một phân khúc/concept, không web; vẫn phải ghi đủ file bắt buộc.
@@ -753,7 +856,7 @@ Một thư mục `output/` tồn tại chưa đủ chứng minh lần build mớ
 - [ ] Model gateway hoạt động, tên model hợp lệ và có khả năng gọi tool.
 - [ ] `.env` đã có giá trị thật; không có biến tự tham chiếu; backend đã restart sau khi đổi môi trường.
 - [ ] Hiểu và chủ động bật quyền Python cho workflow tin cậy; dependency Excel/PPTX có đủ.
-- [ ] Cả 13 Agent có ba tool file; web tool và key chỉ dùng khi cần.
+- [ ] Cả 15 Agent có ba tool file; web tool và key chỉ dùng khi cần.
 - [ ] Skills bật và Allow đúng vai trò; không coi skill là quyền ghi file.
 - [ ] Workflow đã Save; Launch chọn đúng bản chính/auto/recovery.
 - [ ] `PREFLIGHT: OK`; biết đây chỉ là kiểm tra local, không kiểm chất lượng model.
@@ -772,25 +875,27 @@ Các bảng dưới được đối chiếu trực tiếp với `ad_agency_v2.ya
 
 | ID Agent | Model đang lưu | Tools | Skill vai trò chính | Skill bổ sung đang gắn |
 |---|---|---|---|---|
-| `Strategy_QA` | `ag/gemini-3.8-flash` | File | `ad-strategy-quality-review` | `ad-budget-feasibility`, `ad-tracking-readiness`, `ad-claims-review` |
-| `Performance_Analyst` | `cx/gpt-6-luna` | File | `ad-measurement-experiments` | `ad-data-contracts`, `ad-tracking-readiness`, `ad-campaign-learning` |
-| `Media_Planner` | `ag/gemini-3.8-flash` | File | `ad-media-planning` | `ad-data-contracts`, `ad-budget-feasibility`, `ad-campaign-learning` |
-| `Creative_Director` | `cx/gpt-6.1-sol` | File | `ad-creative-direction` | `ad-claims-review` |
-| `Delivery_Packager` | `cx/gpt-6-luna` | File | `ad-handoff-notes` | — |
+| `Director_Brief` | `ag/gemini-3.8-flash` | File | `ad-brief-planning` | — |
 | `Market_Researcher` | `ag/gemini-3.8-flash` | File; `web_search`, `read_webpage_content` | `ad-market-research` | — |
 | `Competitor_Analyst` | `ag/gemini-3.8-flash` | File; `web_search`, `read_webpage_content` | `ad-competitor-analysis` | — |
 | `Customer_Insight` | `ag/gemini-3.8-flash` | File; `read_webpage_content`, `web_search` | `ad-customer-insight` | — |
-| `Evidence_Digest` | `cx/gpt-6.1-sol` | File; `read_webpage_content` | `ad-evidence-synthesis` | `ad-claims-review` |
-| `Director_Brief` | `cx/gpt-6.1-sol` | File | `ad-brief-planning` | — |
-| `Brand_Strategist` | `gemini/gemini-3.1-flash-lite-preview` | File | `ad-brand-positioning` | — |
-| `Director_Strategy` | `gemini/gemini-3.5-flash-lite` | File | `ad-campaign-strategy` | `ad-budget-feasibility`, `ad-campaign-learning` |
-| `Plan_Assembler` | `ag/gemini-3.8-flash` | File | `ad-plan-assembly-rework` | `ad-data-contracts` |
+| `Evidence_Digest` | `ag/gemini-3.8-flash` | File; `read_webpage_content` | `ad-evidence-synthesis` | `ad-claims-review` |
+| `Brand_Strategist` | `ag/gemini-3.8-flash` | File | `ad-brand-positioning` | — |
+| `Director_Strategy` | `cx/gpt-6.1-sol` | File | `ad-campaign-strategy` | `ad-budget-feasibility`, `ad-campaign-learning` |
+| `Media_Planner` | `ag/gemini-3.8-flash` | File | `ad-media-planning` | `ad-data-contracts`, `ad-budget-feasibility`, `ad-campaign-learning` |
+| `Creative_Director` | `cx/gpt-6.1-sol` | File | `ad-creative-direction` | `ad-claims-review` |
+| `Performance_Analyst` | `cx/gpt-6-luna` | File | `ad-measurement-experiments` | `ad-data-contracts`, `ad-tracking-readiness`, `ad-campaign-learning` |
+| `Plan_Assembler` | `cx/gpt-6.1-sol` | File | `ad-plan-assembly-rework` | `ad-data-contracts` |
+| `Strategy_QA` | `ag/gemini-3.8-flash` | File | `ad-strategy-quality-review` | `ad-budget-feasibility`, `ad-tracking-readiness`, `ad-claims-review` |
+| `Publication_Editor` | `cx/gpt-6.1-sol` | File | `ad-creative-direction` | `ad-claims-review` |
+| `Publication_QA` | `ag/gemini-3.8-flash` | File | `ad-publication-quality-review` | — |
+| `Delivery_Packager` | `ag/gemini-3.8-flash` | File | `ad-handoff-notes` | — |
 
 Tham số chung hiện có `protocol: chat`. Bản auto dùng các biến model riêng; đổi model trong main không tự sửa auto hoặc recovery đã tạo. Tên model hiển thị là cấu hình tại thời điểm viết, không phải khuyến nghị thay model bạn đã chọn.
 
-### 17.2. Toàn bộ 71 edge của workflow chính
+### 17.2. Bảng cạnh và nhánh banner của workflow chính
 
-Đọc cột: **Kích hoạt** tương ứng Trigger; **Giữ** tương ứng Keep Message Input; **Dọn** tương ứng Clear Context. Tất cả 71 cạnh hiện truyền dữ liệu (`carry_data=true` theo mặc định) và không bật `clear_kept_context`. Dấu “—” trong điều kiện nghĩa không khai báo bộ lọc riêng; vẫn có thể bị processor loại payload.
+Đọc cột: **Kích hoạt** tương ứng Trigger; **Giữ** tương ứng Keep Message Input; **Dọn** tương ứng Clear Context. Tất cả 77 cạnh truyền dữ liệu (`carry_data=true` theo mặc định) và không bật `clear_kept_context`. Bảng được đồng bộ từ YAML hiện hành, gồm cả các cạnh xuất bản mới. Dấu “—” trong điều kiện nghĩa không khai báo bộ lọc riêng; vẫn có thể bị processor loại payload.
 
 Bảng nhóm điều kiện theo tên trường gọn để dễ tra: `có` là Contains (any), `cấm` là Exclude (none). Các bộ lọc keyword hiện phân biệt chữ hoa/thường.
 
@@ -841,11 +946,11 @@ Bảng nhóm điều kiện theo tên trường gọn để dễ tra: `có` là 
 | 43 | `Campaign_Rules` → `Strategy_QA` | Tắt | Có | — | — | — |
 | 44 | `Plan_Assembler` → `Plan_Gate_Script` | Bật | — | — | — | — |
 | 45 | `Plan_Gate_Script` → `Plan_Gate` | Bật | — | — | — | — |
-| 46 | `Plan_Gate` → `Strategy_QA` | Bật | — | — | có: `[[PLAN_OK]]`; cấm: `[[EXEC_FAIL]]` | `ad_checked_payload` |
-| 47 | `Plan_Gate` → `Plan_Assembler` | Bật | — | — | có: `[[PLAN_ISSUES]]`; cấm: `[[EXEC_FAIL]]` | `ad_checked_payload` |
-| 48 | `Plan_Gate` → `Revision_Limit` | Bật | — | — | có: `[[PLAN_ISSUES]]`; cấm: `[[EXEC_FAIL]]` | `ad_checked_payload` |
-| 49 | `Plan_Gate` → `Blocked_Output` | Bật | — | — | — | `ad_plan_fallback` |
-| 50 | `Plan_Gate` → `Client_Review` | Tắt | — | — | có: `[[PLAN_OK]]`; cấm: `[[EXEC_FAIL]]` | `ad_checked_payload` |
+| 46 | `Plan_Router` → `Strategy_QA` | Bật | — | — | có: `[[PLAN_OK]]`; cấm: `[[EXEC_FAIL]]` | `ad_checked_payload` |
+| 47 | `Plan_Router` → `Plan_Assembler` | Bật | — | — | có: `[[PLAN_ISSUES]]`; cấm: `[[EXEC_FAIL]]` | `ad_checked_payload` |
+| 48 | `Plan_Router` → `Revision_Limit` | Bật | — | — | có: `[[PLAN_ISSUES]]`; cấm: `[[EXEC_FAIL]]` | `ad_checked_payload` |
+| 49 | `Plan_Router` → `Blocked_Output` | Bật | — | — | — | `ad_plan_fallback` |
+| 50 | `Plan_Router` → `Client_Review` | Tắt | — | — | có: `[[PLAN_OK]]`; cấm: `[[EXEC_FAIL]]` | `ad_checked_payload` |
 | 51 | `Plan_Assembler` → `Strategy_QA` | Tắt | — | Có | — | — |
 | 52 | `QA_Router` → `Plan_Assembler` | Bật | — | — | có: `[[QA_REVISE]]` | `ad_checked_payload` |
 | 53 | `QA_Router` → `Revision_Limit` | Bật | — | — | có: `[[QA_REVISE]]` | `ad_checked_payload` |
@@ -856,17 +961,23 @@ Bảng nhóm điều kiện theo tên trường gọn để dễ tra: `có` là 
 | 58 | `Client_Review` → `Invalid_Review_Notice` | Bật | — | — | có: `[[`, `[[EXEC_FAIL]]` | — |
 | 59 | `Review_Router` → `Plan_Assembler` | Bật | — | — | có: `[[REVIEW_REVISE]]` | `ad_checked_payload` |
 | 60 | `Review_Router` → `Revision_Limit` | Bật | — | — | có: `[[REVIEW_REVISE]]` | `ad_checked_payload` |
-| 61 | `Review_Router` → `Delivery_Packager` | Bật | — | — | có: `[[REVIEW_APPROVE]]` | `ad_checked_payload` |
-| 62 | `Review_Router` → `Invalid_Review_Notice` | Bật | — | — | — | `ad_review_fallback` |
-| 63 | `Invalid_Review_Notice` → `Blocked_Output` | Bật | — | — | — | — |
-| 64 | `Revision_Limit` → `Plan_Assembler` | Bật | — | — | — | — |
-| 65 | `Revision_Limit` → `Blocked_Output` | Bật | — | — | — | — |
-| 66 | `Plan_Assembler` → `Delivery_Packager` | Tắt | — | Có | — | — |
-| 67 | `QA_Router` → `Delivery_Packager` | Tắt | — | — | có: `[[QA_PASS]]` | `ad_checked_payload` |
-| 68 | `Delivery_Packager` → `Build_Script` | Bật | — | — | — | — |
-| 69 | `Build_Script` → `Build_Files` | Bật | — | — | — | — |
-| 70 | `Build_Files` → `Delivery` | Bật | — | — | có: `[[BUILD_OK]]`; cấm: `[[EXEC_FAIL]]` | `ad_checked_payload` |
-| 71 | `Build_Files` → `Blocked_Output` | Bật | — | — | — | `ad_build_fallback` |
+| 61 | `Review_Router` → `Publication_Editor` | Bật | — | — | có: `[[REVIEW_APPROVE]]` | `ad_publication_start` |
+| 62 | `Banner_Producer` → `Delivery_Packager` | Bật | — | — | — | `ad_publication_release` |
+| 63 | `Banner_Producer` → `Blocked_Output` | Bật | — | — | — | `ad_banner_fallback` |
+| 64 | `Review_Router` → `Invalid_Review_Notice` | Bật | — | — | — | `ad_review_fallback` |
+| 65 | `Invalid_Review_Notice` → `Blocked_Output` | Bật | — | — | — | — |
+| 66 | `Revision_Limit` → `Plan_Assembler` | Bật | — | — | — | — |
+| 67 | `Revision_Limit` → `Blocked_Output` | Bật | — | — | — | — |
+| 68 | `Plan_Assembler` → `Delivery_Packager` | Tắt | — | Có | — | — |
+| 69 | `QA_Router` → `Delivery_Packager` | Tắt | — | — | có: `[[QA_PASS]]` | `ad_checked_payload` |
+| 70 | `Delivery_Packager` → `Build_Script` | Bật | — | — | — | — |
+| 71 | `Build_Script` → `Build_Files` | Bật | — | — | — | `ad_publication_build` |
+| 72 | `Build_Files` → `Delivery` | Bật | — | — | có: `[[BUILD_OK]]`; cấm: `[[EXEC_FAIL]]` | `ad_checked_payload` |
+| 73 | `Build_Files` → `Blocked_Output` | Bật | — | — | — | `ad_build_fallback` |
+| 74 | `Publication_Editor` → `Publication_QA` | Bật | — | — | — | `ad_publication_qa_input` |
+| 75 | `Publication_QA` → `Banner_Producer` | Bật | — | — | — | `ad_publication_qa_to_banner` |
+| 76 | `Publication_QA` → `Blocked_Output` | Bật | — | — | — | `ad_publication_qa_blocked` |
+| 77 | `Plan_Gate` → `Plan_Router` | Bật | — | — | — | `ad_plan_classify` |
 
 ### 17.3. Các hàm xử lý payload để tra cứu
 
@@ -874,7 +985,8 @@ Bảng nhóm điều kiện theo tên trường gọn để dễ tra: `có` là 
 |---|---|
 | `ad_agency_bootstrap` | Input → Rules: kiểm quyền/dependency, cài kiểm kết quả Agent và ràng buộc đề bài |
 | `ad_brief_route` | Brief → Brief_Router: kiểm dòng quyết định, giữ nội dung rồi thêm token Brief |
-| `ad_qa_route` | QA → QA_Router: kiểm dòng quyết định rồi thêm token QA |
+| `ad_plan_classify` | Gate → Plan_Router: phân loại OK/ISSUES/ERROR, chặn lỗi nguồn và lỗi lặp không tiến triển |
+| `ad_qa_route` | QA → QA_Router: nhận dòng quyết định do validator tạo từ báo cáo JSON hợp lệ rồi thêm token QA |
 | `ad_review_route` | Human → Review_Router: kiểm lệnh duyệt/sửa đúng cú pháp |
 | `ad_checked_payload` | Nhiều cạnh thành công/sửa: chỉ chuyển envelope có token hợp lệ, không mâu thuẫn |
 | `ad_brief_fallback`, `ad_qa_fallback`, `ad_plan_fallback`, `ad_build_fallback`, `ad_review_fallback` | Đường dự phòng: output hợp lệ thì trả None để không mở nhánh lỗi; output không hợp lệ thì chuyển lý do chặn |
@@ -895,3 +1007,237 @@ Các liên kết dưới đây dành cho người muốn đối chiếu, không 
 ### 17.5. Phần hiện chưa có
 
 Không coi các hướng phát triển sau là tính năng đã triển khai: tự tối ưu từ dữ liệu tài khoản quảng cáo, tự đăng/chạy chiến dịch, tự sản xuất toàn bộ asset, đầu ra tách thành `output/<plan_version>/`, schema chuyên sâu cho mọi loại claim, hoặc chữ ký QA độc lập thay thế hoàn toàn báo cáo model. Hiện output vẫn nằm trong `code_workspace/output/`; nội dung chiến lược và chất lượng trình bày cần người sử dụng xem lại trước triển khai.
+
+### 17.6. Banner_Producer — node tạo ảnh riêng
+
+Node Python Banner_Producer tạo ảnh; Publication_Editor bổ sung bản copy công khai. Tổng hiện hành 33 node/77 cạnh, 15 Agent. Luồng:
+
+```text
+Review_Router (APPROVE) → Publication_Editor → Publication_QA → Banner_Producer → Delivery_Packager → Build_Files
+                                  lỗi → Blocked_Output
+```
+
+Các node xuất bản nằm ngoài vòng sửa kế hoạch để tránh tạo ảnh lặp. Review_Router gọi ad_publication_start ghi ủy quyền kế hoạch; Publication_Editor ghi copy riêng; ad_publication_banner_script tạo mã Python chạy ảnh. Banner_Producer đi tới Delivery_Packager qua ad_publication_release: kiểm và đóng dấu file cuối theo ủy quyền một lần. Nhánh lỗi vẫn về Blocked_Output. Không thêm vòng Human thứ hai.
+
+**Bật trên bản chính:** thêm vào `.env` backend:
+
+```dotenv
+AD_BANNER_ENABLED=1
+```
+
+Restart backend và mở lại YAML. Đặt 0 để tắt; khi tắt, node báo DISABLED, không gửi request và bộ giao không có PNG banner; bài đăng, lịch và kịch bản vẫn theo luồng xuất bản. Bản auto có AD_BANNER_ENABLED=0 ngay trong env của node để benchmark không tự phát sinh chi phí ảnh; muốn thử auto với ảnh phải chủ động đổi cấu hình đó.
+
+Model trong env của Banner_Producer là `ag/gemini-3.1-flash-image`. Node dùng AD_BANNER_BASE_URL/AD_BANNER_API_KEY nếu có; nếu không dùng BASE_URL/API_KEY hiện tại của 9Router. Không đưa key vào prompt hoặc YAML. API là POST `/v1/images/generations`, yêu cầu `response_format=b64_json`, không dùng Chat Completions. Nguồn đối chiếu: [hướng dẫn API ảnh của 9Router](https://github.com/decolua/9router/blob/master/skills/9router-image/SKILL.md). Việc model xuất hiện trong danh mục chỉ chứng minh có khai báo hỗ trợ, không thay lần tạo ảnh thật thành công.
+
+**Đầu vào:** `artifacts/publication_content.json` đã qua Publication_QA, gắn đúng `plan_version` và nguồn snapshot đã duyệt. Banner_Producer lấy headline, CTA và hướng hình ảnh từ mục `banners` của bộ copy này, không dùng nguyên hook nghiên cứu làm chữ đăng. Số banner phải khớp `AD_BANNER_COUNT` (mặc định 2). Node kiểm hash nguồn/snapshot và bộ copy trước khi tạo ảnh.
+
+Node tạo nền minh họa AI rồi ghép chữ tiếng Việt bằng Pillow thành PNG 1024×1024. Ảnh cuối của luồng hiện hành không in `[GIẢ THUYẾT]`, DRAFT hoặc dòng chưa duyệt; nguồn gốc AI được ghi trong hồ sơ nội bộ. Minh họa không phải bằng chứng có nhân viên, sản phẩm hay kết quả dịch vụ thật. Chữ không vừa thì báo lỗi thay vì cắt nội dung đã duyệt. Cơ chế banner nháp cũ chỉ phục vụ workflow cũ; không được dùng mô tả đó để đánh giá bộ xuất bản mới.
+
+**Nơi lưu:**
+
+```text
+code_workspace/artifacts/banners/<plan_version>/<fingerprint>/BN01_v01.png
+code_workspace/artifacts/banners/<plan_version>/<fingerprint>/BN02_v01.png
+code_workspace/internal/banner_manifest.json
+code_workspace/internal/banner_request_ledger.json
+```
+
+Với luồng xuất bản hiện tại, Build đặt ảnh cuối ở `output/publish/banners/<id>.png`, ghi nguồn gốc AI và hash trong `output/internal/publication_manifest.json`. Source manifest có thể giữ trạng thái trước seal để đối chiếu lịch sử; trạng thái bản giao lấy từ publication_manifest và approval_mode=PLAN_AUTHORIZATION. Ảnh thiếu, sai định dạng, lệch hash/phiên bản hoặc bị đổi sau seal đều chặn Build. Không cần người dùng duyệt ảnh lần hai sau HUMAN: APPROVE; code không ghi giả rằng người dùng đã xem riêng từng ảnh.
+
+**Chi phí và lỗi:** env của node có AD_BANNER_COUNT=2 và AD_BANNER_REQUEST_LIMIT=2, timeout 300 giây. Đây là giới hạn request do ChatDev gửi trong session, không phải trần tiền và không kiểm soát retry bên trong 9Router. Mỗi lần gửi đều đặt chỗ trong ledger trước request, kể cả lỗi/timeout; không tự retry/fallback provider. Kết quả đầy đủ cùng fingerprint được dùng lại khi hash khớp. Tạo dở giữ IN_PROGRESS, không coi là thành công; chỉ sau khi người dùng kiểm ledger và chủ động tăng limit (tối đa 4) mới có thể tiếp tục phần thiếu, không tạo lại ảnh đã có. Thiếu config/font, quota, URL-only thay vì base64 hoặc ảnh hỏng đều đi nhánh lỗi. Lỗi có ở internal/banner_error.json; không ghi key hoặc response upstream vào báo cáo. Khóa banner_generation.lock còn sau khi process bị kill cần kiểm process cũ và ledger trước khi xử lý, không xóa mù để chạy lại có phí.
+
+Publication_Editor cung cấp bộ bài đăng, video_scripts và content_calendar. Banner_Producer chỉ tạo ảnh, không tạo/dựng video. Không có nút duyệt ảnh lần hai; HUMAN: APPROVE đã ủy quyền hoàn thiện đầu ra cuối. Xem mục 18 để chọn đúng thư mục dùng.
+
+### 17.7. Khung nhập yêu cầu và file đính kèm
+
+Chat và Graph dùng chung CampaignComposer, giữ nội dung/file khi chuyển view. Bấm Add files để chọn nhiều file, kéo thả vào khung hoặc dán ảnh từ clipboard. File hiện thành thẻ ngay phía trên ô nhập, có tên đầy đủ khi rê chuột, loại, dung lượng và trạng thái chờ/đang tải/Ready/lỗi. Ảnh có thumbnail và xem trước; tài liệu khác hiển thị biểu tượng, chưa có trình đọc PDF/Markdown nội tuyến.
+
+File lỗi vẫn nằm trong bản nháp để Retry hoặc bỏ bằng nút ×. Nút gửi và Launch bên phải cùng bị khóa khi đang upload, có file lỗi, đang gửi hoặc workflow đang chạy mà chưa yêu cầu Human trả lời. Chỉ attachment ID đã upload thành công được gửi. Bỏ một file chỉ gỡ khỏi bản nháp, không phải yêu cầu xóa file đã upload trên server. Đổi workflow/session sẽ dọn các file của bản nháp cũ để không gửi nhầm ID giữa các phiên.
+
+Ô nhập tự tăng chiều cao đến giới hạn rồi cuộn bên trong. Enter xuống dòng; Ctrl+Enter hoặc Command+Enter gửi, không gửi trong lúc đang gõ tổ hợp IME. Có nút Launch ngay trong khung; khi Human hỏi thì đổi thành Send reply, hỗ trợ phản hồi chỉ có file. Khi workflow đã hoàn tất/hủy, Relaunch mở phiên mới trước khi nhập/đính kèm cho lượt tiếp theo. Lỗi HTTP lúc bắt đầu vẫn giữ prompt và file để thử lại; WebSocket phản hồi Human dùng cơ chế gửi hiện có, chưa thêm xác nhận nhận tin từ server.
+
+Màn hình Graph hẹp tự thu gọn panel điều khiển để tránh che ô nhập, có nút mở lại. Không cần chạy lại Agent để kiểm giao diện; nếu đang dùng Vite thì tải lại trang, nếu backend phục vụ bản build thì chạy `npm run build` trong frontend rồi tải lại trang. Trước khi tải lại, lưu nội dung chưa gửi ra ngoài vì chưa có lưu draft bền vững qua refresh.
+
+Kiểm thử logic upload: `npm run test:composer` trong thư mục frontend. Các kiểm tra này không gọi model.
+
+
+### Quyết định QA từ báo cáo đã kiểm tra
+
+`Strategy_QA` lưu `artifacts/qa_report.json`; phần chat chỉ tóm tắt. Validator kiểm schema v2, verdict, plan_version, tính nhất quán của báo cáo và hash từng file trong review_manifest trước khi tạo dòng quyết định chuẩn cho Router. Chat thiếu trạng thái, sai định dạng hoặc ghi khác verdict không còn gây lỗi định tuyến: báo cáo hợp lệ là nguồn quyết định duy nhất. REVISE vẫn chuyển về vòng sửa; BLOCKED vẫn chuyển nhánh chặn. Báo cáo sai/cũ hoặc file đã đổi vẫn bị chặn, không tự sửa thành PASS. Cơ chế này không khắc phục lỗi model `malformed_function_call`. Nạp lại YAML và khởi động lại backend để phiên mới dùng cả code và prompt mới; không chạy lại toàn workflow chỉ để kiểm chứng thay đổi này.
+
+
+### Điều chỉnh khung chat trong View Graph
+
+Kéo mép phải của khung chat để đổi chiều rộng; mặc định 420px, giới hạn từ 320px đến 50% vùng nội dung khi đủ chỗ. Thanh kéo có thể nhận focus và dùng phím trái/phải, Home/End. Chiều rộng được lưu trên trình duyệt và giữ khi đóng/mở panel hoặc chuyển view. Màn hình hẹp dùng panel phủ lên graph và tắt kéo ngang.
+
+Ô nhập trống hiển thị gọn; nội dung dài tự tăng chiều cao tới giới hạn rồi cuộn bên trong, không có nút mở rộng thủ công. Khi workflow chạy và không có bản nháp/file đính kèm, ô nhập khóa thu thành thanh trạng thái; khi chờ Human trả lời, ô nhập mở lại. Bản nháp và file vẫn được giữ theo quy trình upload/gửi hiện có.
+
+
+### QA JSON: kiểm tra trước khi lưu và sửa trong cùng lượt
+
+Trong workflow quảng cáo, bootstrap bật `ad_qa_write_validation`. `save_file` kiểm toàn bộ ứng viên `artifacts/qa_report.json` với manifest hiện hành trước khi ghi: severity chỉ `high|medium|low`, evidence file phải thuộc snapshot, location không rỗng và các trường QA v2 phải đầy đủ. Manifest là metadata phục vụ kiểm tra, không phải evidence file thuộc snapshot. Lỗi trả đúng issue/trường cần sửa và giữ nguyên file cũ. QA được sửa báo cáo tối đa hai lần sau lần ghi đầu bị từ chối; tới lần từ chối thứ ba thì dừng. Nếu QA bỏ qua lỗi và kết thúc, validator vẫn chặn dù file cũ hợp lệ. Không đổi verdict/xóa issue để vượt kiểm tra.
+
+Đây là sửa định dạng báo cáo bên trong một lượt Agent, khác bộ đếm rework của Assembler. `REVISE` hợp lệ vẫn cần Assembler sửa nội dung thật; kiểm schema không xác nhận chiến lược đã đúng.
+
+### Khôi phục từ snapshot khi không có log đầy đủ
+
+`tools/prepare_ad_recovery.py --session <session_id> --from-snapshot --request-file <file_chi_dan> --output yaml_instance/<ten_moi>.yaml` tạo workflow mới nhưng không khởi chạy. Chế độ này yêu cầu mọi hash của review snapshot khớp file nguồn và giữ riêng chỉ dẫn khôi phục; không giả lập log hay coi file tồn tại là lịch sử NODE_END. Agent nguồn chỉ được cache nếu đầu ra qua hợp đồng file. Assembler, QA, Packager luôn chạy lại; QA cũ không được phục hồi làm phê duyệt. Gate tạo phiên bản mới cho bản đã sửa. Có lỗi hash/file nguồn thì dừng chuẩn bị, không tự ghi đè nguồn.
+
+Workflow recovery phụ thuộc file/log/snapshot của phiên gốc. Repo mới clone không mặc định có các dữ liệu đó; dùng lệnh chuẩn bị recovery với session thật trên máy đang giữ dữ liệu, rồi đọc manifest trước khi chạy.
+
+
+<a id="18-xuat-ban"></a>
+## 18. Bộ đầu ra cuối và một lần duyệt
+
+Luồng hiện hành: `Client_Review (HUMAN: APPROVE) → Publication_Editor → Publication_QA → Banner_Producer → Delivery_Packager → Build_Files → Delivery`. Phê duyệt ở Client_Review đồng thời ủy quyền tạo và chốt đầu ra dẫn xuất. Không có Publication_Review hay lệnh PUBLISH: APPROVE thứ hai. Cả bản chính và bản auto đều dừng tại Human Client_Review trước khi phát hành bộ cuối; bản auto vẫn tắt ảnh mặc định và không tự phê duyệt nội dung.
+
+### 18.1. Dùng file nào
+
+- `output/publish/posts/*.txt`: bài hoàn chỉnh, gồm CTA và hashtag, để sao chép đăng.
+- `output/publish/banners/*.png`: banner cuối từ nội dung công khai riêng, nếu tạo ảnh đang bật. Không in nhãn nghiên cứu, DRAFT hay dòng chưa duyệt lên ảnh mới.
+- `output/publish/content_calendar.csv`: lịch theo mã nội dung.
+- `output/production/video_scripts/*.md`: kịch bản có cảnh, lời thoại, chữ và âm thanh; không phải video đã sản xuất.
+- `output/internal/`: kế hoạch, workbook, slide, QA, nghiên cứu, nguồn gốc ảnh AI, giả định và các điều kiện vận hành. Chúng là hồ sơ nội bộ, không phải caption để đăng.
+- `output/internal/publication_manifest.json`: release_id, nguồn duyệt PLAN_AUTHORIZATION, hash file cuối và metadata ảnh AI.
+- `output/manifest.json`: đối chiếu hash toàn bộ bàn giao; README hướng dẫn thư mục.
+
+### 18.2. Publication_Editor
+
+Đây là Agent biên tập bổ sung, dùng cùng cấu hình công cụ file và skill ad-creative-direction của Creative_Director. Vai trò riêng yêu cầu chỉ ghi `artifacts/publication_content.json`: schema_version=1.0, plan_version hiện hành, brand_name, posts, video_scripts, banners, calendar. Mỗi nội dung có source_refs thuộc snapshot. Mặc định sáu bài, hai kịch bản và hai banner; số banner phải khớp AD_BANNER_COUNT. Không dùng bảng hook nghiên cứu làm chữ banner trực tiếp.
+
+save_file kiểm schema, ID, lịch, mốc kịch bản, tham chiếu file và nhãn/placeholder nội bộ trước khi ghi. Có tối đa hai lần sửa sau lần ghi đầu bị từ chối; lỗi chưa sửa vẫn chặn kết thúc Agent. Code kiểm cấu trúc và truy xuất nguồn, không tự chứng minh nội dung đúng ngoài đời. Giá/địa chỉ/năng lực chưa xác nhận phải được bỏ khỏi copy hoặc diễn đạt thành lời mời trao đổi phù hợp; không biến chúng thành sự thật bằng cách bỏ nhãn giả thuyết.
+
+### 18.3. Duyệt một lần và đóng dấu
+
+Sau HUMAN: APPROVE, code lưu ủy quyền theo đúng plan_version, hash file nguồn và QA hiện hành trong state. Khi bài/ảnh hoàn tất, code kiểm lại, kết xuất file cuối và tự đóng dấu release theo ủy quyền kế hoạch; không giả định người dùng đã xem từng ảnh. Seal trong state được truyền sang Build bằng processor tin cậy. Ghi đè approval JSON bằng tool không tạo được quyền phát hành. Thay đổi copy, banner, QA, manifest hoặc nguồn sau khi seal thì Build chặn.
+
+Duyệt đầu ra không tự đăng bài/chi tiền và không chuyển TRACKING/ACCOUNT_SETUP/OPERATIONS đang PENDING thành VERIFIED. Nếu ảnh tắt, manifest ghi images_enabled=false và không tạo banner giả. Nếu tạo ảnh lỗi, workflow chặn, không tăng ngân sách hay gọi lại vô hạn.
+
+Khởi động lại backend và nạp lại YAML để dùng code/prompt mới. Các phiên và ảnh cũ giữ nguyên; không tự bỏ dấu nháp ở ảnh cũ hoặc đổi hồ sơ duyệt lịch sử.
+
+
+### 18.4. QA tự động bộ nội dung công khai
+
+Publication_QA là Agent thứ 15, dùng skill riêng ad-publication-quality-review và tool file. Nó đọc publication_content.json cùng nguồn đã duyệt, ghi publication_qa.json gắn hash chính xác của bản copy. Tám tiêu chí: FACTS, OFFERS_CLAIMS, COPY_COMPLETENESS, CTA_CONSISTENCY, SCHEDULE, VIDEO_SCRIPT, VISUAL_BRIEFS, RIGHTS_PROVENANCE. PASS mới được tạo ảnh; BLOCKED giữ lỗi để sửa và không xuất publish. Không có Human duyệt thêm, không có vòng sửa vô hạn. QA này kiểm copy và visual brief; ảnh thực tế được Python kiểm định dạng, kích thước, chữ overlay và hash sau tạo, không giả định đã có đánh giá thị giác bằng model. Báo cáo này cũng được đưa vào hồ sơ internal và hash release.
+
+
+### 18.5. Schema Publication_QA và khôi phục khi báo cáo lỗi
+
+Publication_QA không dùng chung skill với Strategy_QA. Skill riêng chỉ mô tả một hợp đồng: schema_version, plan_version, bundle_sha256, verdict, checks, findings. Processor tạo JSON mẫu từ file hiện hành, gồm hash thật và đủ tám id chuẩn; không để model nhớ hoặc tính nhẩm. Mẫu để reason trống/source_refs rỗng nên chưa được phép lưu nguyên mẫu như báo cáo đã kiểm.
+
+Nếu Agent dùng criteria_results/criterion_id/issues hoặc tự đặt tên check, save_file giữ nguyên file cũ và trả lỗi nêu trường sai, id thiếu/thừa/trùng, kèm lại JSON mẫu đúng phiên bản. Giới hạn vẫn lần ghi đầu cộng hai lần sửa, không tự đổi verdict hoặc gộp tiêu chí để lấy PASS. Kiểm thử có ca phát lại ba cấu trúc sai đã gặp và một Agent/provider mock sửa đúng từ tool error; không bảo đảm provider thật không bao giờ sinh sai.
+
+Bản khôi phục riêng phần xuất bản: `tools/prepare_publication_recovery.py --session <session_id> --output yaml_instance/<ten_moi>.yaml`. Chỉ áp dụng khi kế hoạch có QA PASS, snapshot khớp hash và publication_content.json hợp lệ. Tự mang theo 18 artifact nguồn, snapshot, manifest, QA kế hoạch và copy công khai (39 file). Phiên mới duyệt một lần tại Client_Review, rồi chỉ chạy Publication_QA, Banner_Producer, Delivery_Packager và Build; không chạy lại nghiên cứu, Assembler, Strategy_QA hoặc Publication_Editor. Phiên gốc không thay đổi và bản chuẩn bị không gọi model/ảnh.
+
+Sau khi tạo recovery, khởi động lại backend nếu vừa cập nhật code, tải lại danh sách workflow và chọn tên mới. Khi Client_Review hỏi, nhập `HUMAN: APPROVE`. Phần còn lại vẫn gọi model/ảnh nếu bật; lệnh chuẩn bị recovery không tự tiếp tục phiên cũ.
+
+
+### 18.6. Ghi CSV từ bảng có cấu trúc bằng tool cũ
+
+Các CSV quảng cáo trong artifacts/ có thể được ghi qua save_file với content là một chuỗi JSON gồm columns và rows. columns là danh sách tên cột đúng schema; rows là mảng object, mỗi object có đúng các key cột. Tool không đổi chữ ký/tham số API: content vẫn là string. Python dùng csv.DictWriter để quote toàn bộ ô và xuất UTF-8 BOM, giữ nguyên dấu phẩy, dấu ngoặc kép, xuống dòng và tiếng Việt trong ô. Dữ liệu null thành ô trống; không tự điền 0 hoặc dự báo. Số phải hữu hạn, không dùng bool/nested object; key JSON trùng và row thiếu/thừa key bị chặn.
+
+Ví dụ hình dạng content (điền đầy đủ cột của file thực tế, không dùng ví dụ rút gọn này như artifact): {"columns":["tên_cột"],"rows":[{"tên_cột":"ghi chú có dấu phẩy, vẫn là một ô"}]}. Header/mỗi cột cụ thể vẫn do schema của từng node quyết định, bao gồm estimate_status nếu dùng NOT_ESTIMATED.
+
+CSV raw vẫn được nhận và kiểm tra như trước. Nếu lệch số ô, tool trả header và các ô đã parse, đồng thời gợi ý dùng bảng JSON; không tự nối/cắt ô mơ hồ. Append bảng JSON phải khớp tên/thứ tự header file cũ, không lặp header/BOM; tool thêm dấu xuống dòng phân cách khi cần. Workflow ngoài quảng cáo không bị đổi cách ghi.
+
+Các role/skill xuất CSV đã cập nhật ưu tiên cách này. Khởi động lại backend và nạp lại YAML để model thấy hướng dẫn mới. Thay đổi không tự sửa hay chạy lại phiên đã dừng, cũng không xử lý lỗi provider malformed_function_call.
+
+
+### 18.7. Chặn vòng sửa không tiến triển và lỗi nguồn
+
+`Plan_Gate → Plan_Router` là đường duy nhất ra khỏi Gate. Router là passthrough, không gọi model; processor ad_plan_classify chạy đúng một lần mỗi kết quả rồi các cạnh cũ mới nhận token. Gate OK xóa dấu lỗi vòng trước; các lỗi có thể sửa trong quyền Assembler đi rework tối đa một lượt. Nếu cùng tập lỗi còn nguyên sau sửa, Router phát ERROR/NO_PROGRESS và dừng gọi Assembler. Lỗi cần thay/xác minh brief, Evidence hoặc Research không vào vòng sửa Assembler.
+
+Nguồn được kiểm ngay ở save_file của sources.csv và kết quả Evidence_Digest: URL tuyệt đối http/https, ngày ISO hợp lệ, không tương lai theo ngày Asia/Ho_Chi_Minh, ID không trùng. Nguồn đã bị ghi sai ở phiên cũ vẫn được Gate phát hiện và trả PLAN_ERROR với repair_owner=Evidence_Digest. Bộ kiểm tra không tự thêm https hoặc bịa ngày truy cập, không chứng minh nội dung trang đúng hoặc đã được truy cập chỉ vì URL/ngày hợp lệ. Mốc ngày hiện tại được engine cung cấp riêng cho Agent, không lấy ngày chiến dịch làm ngày truy cập.
+
+Kiểm tham chiếu nội bộ bỏ qua URL http/https hợp lệ trước khi tìm đường dẫn máy. Regex cũ khớp nhầm s:/ trong https:// đã được thay; lỗi thật nay nêu dòng và chuỗi khớp để sửa đúng. Đường dẫn C:/, D:\ và artifacts/ thật vẫn bị chặn.
+
+Cả YAML chính và auto đặt Revision_Limit.max_iterations=2, tức một lần tổng hợp và tối đa một lượt sửa chung từ Gate/QA/Human. Preflight kiểm cả giá trị này và đường qua Plan_Router. Khởi động lại backend, mở lại YAML từ đĩa và nạp cấu hình mới trước phiên mới; phiên đang chạy/đã dừng không được hot-patch, và lưu lại bản editor cũ có thể ghi đè thay đổi trên đĩa.
+
+
+<a id="19-git"></a>
+## 19. Chuẩn bị đưa dự án lên Git
+
+### 19.1. Phần nên đưa lên repo
+
+Đưa source backend/frontend, `yaml_instance/ad_agency_v2.yaml`, `yaml_instance/ad_agency_v2_auto.yaml`, `.agents/skills/ad-*`, tests, các công cụ preflight/recovery, `uv.lock`, `frontend/package-lock.json`, `.env.example` và tài liệu đã rà soát lên Git. Skill nằm trong `.agents/skills/` là một phần dự án, cần commit cùng prompt/schema liên quan.
+
+`.env.example` chỉ chứa placeholder. Giữ `.env`, API key thật, `.venv`, `node_modules`, `logs/`, `WareHouse/`, `data/`, backup và báo cáo chẩn đoán ở local. Trước khi add `docs/campaigns/`, `docs/recoveries/` hoặc YAML recovery, kiểm tra dữ liệu khách hàng, file nhúng và thông tin riêng của phiên. Quy tắc ignore không tự gỡ file đã được Git theo dõi.
+
+### 19.2. Kiểm tra và chọn file trước khi commit
+
+Chạy từ **thư mục chứa `.git`**, ví dụ `D:\Project\chatdev`; thay bằng nơi bạn clone thực tế. Lỗi `not a git repository` thường do terminal đang đứng ở thư mục cha.
+
+```powershell
+cd D:\Project\chatdev
+git rev-parse --show-toplevel
+git status --short
+uv run python tools/preflight_ad_agency.py --auto
+git diff --check
+git diff --stat
+```
+
+Preflight kiểm local, không gọi model/ảnh. Khi đã sửa frontend, kiểm tra thêm từ `frontend/`:
+
+```powershell
+npm run test:composer
+npm run build
+```
+
+Chọn file theo từng nhóm và đọc diff trước khi commit; đừng dùng `git add .` khi còn tài liệu riêng của khách hàng hoặc workflow thử chưa rà soát. Ví dụ commit **riêng hướng dẫn**:
+
+```powershell
+git add ad_agency_v2_guide.md
+git diff --cached --check
+git diff --cached --stat
+git diff --cached -- ad_agency_v2_guide.md
+git commit -m "docs: update workflow setup and publishing guide"
+```
+
+Nếu đưa cả thay đổi tính năng lên repo, add đủ source/helper/test/skill mới liên quan cùng YAML; commit riêng YAML trong khi thiếu processor/module mới sẽ khiến máy clone không chạy được. Các lệnh trên chưa push và không đổi remote.
+
+### 19.3. Mang bố cục graph sang máy khác
+
+Không force-add toàn bộ `data/vuegraphs.db` chỉ để lưu hình vẽ. Có thể xuất **chỉ tọa độ theo ID**, lưu thành JSON rồi commit file đó. Khởi động backend, mở v2 trong editor và Save một lần nếu chưa có bản canvas trong database; sau đó chạy tại gốc repo:
+
+```powershell
+$layoutApi = 'http://127.0.0.1:6400/api/vuegraphs'
+$layoutReply = Invoke-RestMethod "$layoutApi/ad_agency_v2"
+$layoutGraph = $layoutReply.content | ConvertFrom-Json
+$layoutNodes = @($layoutGraph.nodes | ForEach-Object {
+    [ordered]@{ id = $_.id; position = $_.position }
+})
+New-Item -ItemType Directory -Path docs/workflow-layouts -Force | Out-Null
+[ordered]@{ workflow = 'ad_agency_v2'; nodes = $layoutNodes } |
+    ConvertTo-Json -Depth 10 |
+    Set-Content -LiteralPath docs/workflow-layouts/ad_agency_v2.positions.json -Encoding utf8
+```
+
+File JSON chỉ được tạo khi bạn thực hiện lệnh xuất. Kiểm tra file có đúng ID/tọa độ, rồi `git add docs/workflow-layouts/ad_agency_v2.positions.json`. Nó không chứa prompt, model, tools, key hoặc payload cạnh.
+
+Trên máy nhận, cài/chạy dự án, mở và Save v2 trong editor trước để có graph đầy đủ theo YAML. Đóng trang editor trong lúc nhập tọa độ, rồi chạy:
+
+```powershell
+$layoutApi = 'http://127.0.0.1:6400/api/vuegraphs'
+$layoutFile = Get-Content -Raw -LiteralPath docs/workflow-layouts/ad_agency_v2.positions.json | ConvertFrom-Json
+if ($layoutFile.workflow -ne 'ad_agency_v2') { throw 'Sai workflow trong file bố cục' }
+$layoutReply = Invoke-RestMethod "$layoutApi/ad_agency_v2"
+$layoutGraph = $layoutReply.content | ConvertFrom-Json
+$layoutById = @{}
+foreach ($layoutNode in $layoutFile.nodes) {
+    $layoutById[$layoutNode.id] = $layoutNode.position
+}
+foreach ($layoutNode in $layoutGraph.nodes) {
+    if ($layoutById.ContainsKey($layoutNode.id)) {
+        $layoutNode.position = $layoutById[$layoutNode.id]
+    }
+}
+$layoutBody = @{
+    filename = 'ad_agency_v2'
+    content = ($layoutGraph | ConvertTo-Json -Depth 100 -Compress)
+} | ConvertTo-Json -Depth 100 -Compress
+Invoke-RestMethod "$layoutApi/upload/content" -Method Post `
+    -ContentType 'application/json; charset=utf-8' `
+    -Body ([System.Text.Encoding]::UTF8.GetBytes($layoutBody))
+```
+
+Mở lại/F5 trang workflow sau khi nhập. Lệnh chỉ thay `position` của ID đã có trong graph đích; không sao chép node hay cạnh từ v2-auto, không đổi Human thành literal, không gọi model và không khởi chạy chiến dịch. Node mới chưa có trong file tọa độ giữ vị trí hiện hành để bạn sắp xếp bổ sung. Viewport/zoom không được xuất; dùng Fit View để xem toàn đồ thị.

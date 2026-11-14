@@ -29,3 +29,6 @@ Tách quan sát, cách giải thích và giả thuyết cần thử. Mỗi đề
 Phân loại hành động giữ, điều chỉnh, dừng thử hoặc thử tiếp theo phạm vi được giao; không tự thực thi thay đổi tài khoản, ngân sách hay brief. Thay đổi lớn cần người dùng duyệt. Giữ bản kế hoạch cũ và snapshot để so sánh, không sửa chúng cho khớp kết quả.
 
 Bàn giao phát hiện và hành động vào báo cáo/section mà nhiệm vụ đã giao. Nếu chưa được chỉ định file mới, không tự tạo artifacts hoặc đổi schema các bảng kế hoạch để chứa kết quả thực. Nêu rõ giới hạn dữ liệu và kết luận nào còn chưa thể đưa ra.
+
+## Độ dài và tái sử dụng đầu vào
+Viết phần nghiệp vụ của vai trò, dẫn file/claim ID thay chép lại brief. Chat tóm tắt file, kết luận và giới hạn; giữ quyết định cuối nếu có. Đọc lại sau ghi, không lặp load khi nguồn chưa đổi. Mốc độ dài trong nhiệm vụ là tham khảo, không cắt schema hoặc bằng chứng để đủ số từ.

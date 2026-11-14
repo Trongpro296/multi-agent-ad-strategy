@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test:composer": "node --test tests/composerAttachments.test.js",
     "preview": "vite preview"
   },
   "dependencies": {

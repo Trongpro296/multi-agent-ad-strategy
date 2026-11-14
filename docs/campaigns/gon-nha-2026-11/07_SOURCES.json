@@ -1,0 +1,38 @@
+{
+  "prepared_on": "2026-11-14",
+  "timezone": "Asia/Saigon",
+  "purpose": "Research inputs, not generated QA evidence or workflow approval",
+  "sources": [
+    {
+      "id": "SRC-BT",
+      "publisher": "bTaskee",
+      "url": "https://www.btaskee.com/vi-VN/giup-viec-nha-theo-gio/",
+      "access_date": "2026-11-14",
+      "read_status": "PUBLIC_PAGE_READ",
+      "scope": "Public hourly-cleaning service description and indicative prices",
+      "limits": "No specific-address quote, independent service audit, advertising results or explicit price-validity year verified"
+    },
+    {
+      "id": "SRC-JV",
+      "publisher": "JupViec",
+      "url": "https://jupviec.vn/jupviecvn--muc-gia-dich-vu-theo-gio-d790.html",
+      "access_date": "2026-11-14",
+      "read_status": "PUBLIC_PAGE_READ",
+      "source_period": "2024 as stated in article",
+      "scope": "Historical reference for hourly-service packages",
+      "limits": "Not a verified current 2026 quote or local advertising benchmark"
+    },
+    {
+      "id": "SRC-GV",
+      "publisher": "GUVI",
+      "url": "https://guvico.com/giup-viec-theo-gio",
+      "access_date": "2026-11-14",
+      "read_status": "PUBLIC_PAGE_READ",
+      "scope": "Hourly-service options and booking conditions",
+      "limits": "Paired price display not treated as a confirmed promotion; no account/app quote or independent quality verification"
+    }
+  ],
+  "excluded": [
+    {"url": "https://www.facebookblueprint.com/student/activity/615287", "reason": "Full page inaccessible; not used as a verified research source"}
+  ]
+}

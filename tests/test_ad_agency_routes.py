@@ -100,15 +100,15 @@ class ConfigTests(unittest.TestCase):
             loaded=load_config(path, vars_override=VARIABLES)
             typed={n.id:n for n in loaded.graph.nodes}
             self.assertEqual(typed['Director_Brief'].context_window,8)
-            for name in ('Brief_Router','QA_Router','Review_Router'):
+            for name in ('Brief_Router','QA_Router','Review_Router','Plan_Router'):
                 self.assertTrue(typed[name].config.only_last_message)
             print(filename, 'loaded: context_window=8; routers.only_last_message=True')
             graph = yaml.safe_load(path.read_text(encoding="utf-8"))["graph"]
             nodes = {n["id"]: n for n in graph["nodes"]}
             self.assertEqual(nodes["Director_Brief"]["context_window"], 8)
-            for name in ("Brief_Router", "QA_Router", "Review_Router"):
+            for name in ("Brief_Router", "QA_Router", "Review_Router", "Plan_Router"):
                 self.assertEqual(nodes[name], dict(id=name, type="passthrough", config=dict(only_last_message=True)))
-            self.assertEqual(nodes["Revision_Limit"]["config"]["max_iterations"], 4)
+            self.assertEqual(nodes["Revision_Limit"]["config"]["max_iterations"], 2)
             pairs = [(e["from"],e["to"]) for e in graph["edges"]]
             self.assertEqual(len(pairs),len(set(pairs)))
             clear = {(e["from"],e["to"]) for e in graph["edges"] if e.get("clear_context")}
@@ -180,17 +180,29 @@ def run_case(filename, case):
         if n=="Brief_Clarification": return msg(f"ANSWER_{counts[n]}")
         return msg(f"BACKGROUND_{n}")
     def python(self,node,messages):
+        if node.id=="Banner_Producer":
+            return msg('{"status":"DISABLED","assets":[]}\n[[BANNER_READY]]')
         if node.id=="Plan_Gate":
             status="OK"
             if case=="budget4" or (case=="budget_once" and version()==1) or (case=="mixed4" and (version()==1 or (filename.endswith('_auto.yaml') and version()==3))): status="ISSUES"
-            text=f"PLAN_GATE_VERSION=V{version()}\n[[PLAN_{status}]]"
+            text=json.dumps({"status":status,"errors":[],"issues":[f"media_plan.csv: fixture repair V{version()}"] if status=="ISSUES" else [],"info":{"fixture":f"PLAN_GATE_VERSION=V{version()}"}})+f"\nPLAN: {status}\n[[PLAN_{status}]]"
             overrides={"plan_error":"[[PLAN_ERROR]]","plan_none":"No token","plan_conflict":"[[PLAN_OK]]\n[[PLAN_ISSUES]]","plan_duplicate":"[[PLAN_OK]]\n[[PLAN_OK]]","plan_failure":"==CODE EXECUTION FAILED==\n[[PLAN_OK]]"}
             return msg(overrides.get(case,text))
         overrides={"build_error":"[[BUILD_ERROR]]","build_blocked":"[[BUILD_BLOCKED]]","build_none":"No token","build_conflict":"[[BUILD_OK]]\n[[BUILD_ERROR]]","build_duplicate":"[[BUILD_OK]]\n[[BUILD_OK]]","build_failure":"==CODE EXECUTION FAILED==\n[[BUILD_OK]]"}
         return msg(overrides.get(case,"[[BUILD_OK]]"))
     manager = get_function_manager(EDGE_PROCESSOR_FUNCTION_DIR); manager.load_functions()
     def broken(*args): raise RuntimeError("processor failure")
-    replacements={}
+    # This suite isolates legacy routing decisions with mocked node outputs.
+    # Real publication validation/approval/build is covered in test_ad_publication.
+    replacements={
+        'ad_publication_start': lambda data,context:data,
+        'ad_publication_banner_script': lambda data,context:'offline banner script',
+        'ad_publication_release': lambda data,context:data,
+        'ad_publication_qa_input': lambda data,context:data,
+        'ad_publication_qa_to_banner': lambda data,context:'offline banner script',
+        'ad_publication_qa_blocked': lambda data,context:None,
+        'ad_publication_build': lambda data,context:data,
+    }
     if case.startswith("qa_missing"): replacements["ad_qa_route"]=None
     if case.startswith("qa_raise"): replacements["ad_qa_route"]=broken
     if case.startswith("brief_missing"): replacements["ad_brief_route"]=None
@@ -219,7 +231,8 @@ class EngineTests(unittest.TestCase):
                     self.assertEqual(delivered,case in good,(filename,case,dict(counts)))
                     self.assertEqual(bool(counts["Blocked_Output"]),case not in good)
                     if case in ("budget4","qa4","mixed4","human4"):
-                        self.assertEqual(counts["Plan_Assembler"],4); self.assertEqual(counts["Revision_Limit"],4); self.assertEqual(counts["Build_Files"],0)
+                        limit=next(n["config"]["max_iterations"] for n in yaml.safe_load((ROOT/"yaml_instance"/filename).read_text(encoding="utf-8"))["graph"]["nodes"] if n["id"]=="Revision_Limit")
+                        self.assertEqual(counts["Plan_Assembler"],limit); self.assertEqual(counts["Revision_Limit"],limit); self.assertEqual(counts["Build_Files"],0)
                     for n in ("Strategy_QA","Client_Review","Delivery_Packager"):
                         for batch in inputs.get(n,[]):
                             self.assertEqual(sum("DRAFT_V" in t for t in batch),1,(filename,case,n,batch))

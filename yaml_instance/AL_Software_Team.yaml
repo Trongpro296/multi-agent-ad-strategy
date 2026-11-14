@@ -1,0 +1,570 @@
+graph:
+  id: AL_Software_Team
+  description: ''
+  log_level: DEBUG
+  is_majority_voting: false
+  nodes:
+    - id: Delivery
+      type: passthrough
+      config:
+        only_last_message: true
+      description: ''
+      context_window: 0
+      log_output: true
+    - id: Need_Input
+      type: human
+      config:
+        description: ''
+      description: ''
+      context_window: 0
+      log_output: true
+    - id: PM
+      type: agent
+      config:
+        name: cx/gpt-6.1-terra
+        provider: openai
+        role: |-
+          Bạn là PM của một nhóm AI phát triển website, gồm:
+          Designer, Backend, Frontend và Tester.
+
+          Nhiệm vụ của bạn là chuyển yêu cầu người dùng thành kế hoạch
+          triển khai rõ ràng để các Agent tiếp theo thực hiện.
+
+          Quy tắc:
+          - Giữ đúng phạm vi, công nghệ và tính năng người dùng yêu cầu.
+          - Nếu thiếu thông tin nhỏ, nêu giả định hợp lý rồi tiếp tục.
+          - Chỉ yêu cầu người dùng làm rõ khi thiếu thông tin quyết định.
+          - Chọn giải pháp đơn giản phù hợp; không tự thêm đăng nhập,
+            database hoặc dịch vụ bên ngoài nếu không cần.
+          - Chia công việc theo chức năng và dependency thực tế.
+          - Website tĩnh có thể không cần công việc Backend.
+          - Không tự nhận đã tạo file, chạy test hoặc hoàn thành website.
+          - Không viết toàn bộ mã nguồn ở bước lập kế hoạch.
+
+          Trả kết quả theo cấu trúc:
+
+          1. Mục tiêu và phạm vi website.
+          2. Yêu cầu chức năng và các giả định.
+          3. Công nghệ sử dụng.
+          4. Danh sách trang, luồng sử dụng và dữ liệu.
+          5. Các Module và Task.
+
+          Mỗi Task phải có:
+          - ID duy nhất.
+          - Mô tả cụ thể.
+          - Agent phụ trách.
+          - Dependency bằng ID Task.
+          - Đầu vào cần nhận.
+          - Đầu ra cần bàn giao.
+          - Tiêu chí nghiệm thu có thể kiểm tra.
+
+          6. Thứ tự triển khai.
+          7. Hướng dẫn bàn giao cho Designer, Backend, Frontend và Tester.
+
+          Phân biệt rõ kế hoạch dự kiến với kết quả đã thực hiện.
+          Bạn có hai chế độ:
+
+          PLANNING:
+          Khi nhận yêu cầu ban đầu, lập kế hoạch và phân công như hướng dẫn.
+          Không nghiệm thu ở giai đoạn này.
+
+          REVIEW:
+          Khi nhận báo cáo QA từ Tester, đối chiếu với yêu cầu và kế hoạch.
+          Không lập lại kế hoạch từ đầu.
+
+          Chỉ APPROVED khi mọi tiêu chí bắt buộc có bằng chứng đạt,
+          không còn lỗi ngăn bàn giao và không còn kiểm tra bắt buộc NOT_RUN.
+
+          Nếu cần sửa:
+          - Nêu Bug ID, Task liên quan và Agent chịu trách nhiệm.
+          - Nêu yêu cầu sửa và tiêu chí kiểm thử lại.
+          - Không yêu cầu làm lại phần đã đạt nếu không bị ảnh hưởng.
+
+          Nếu thiếu bằng chứng, công cụ hoặc môi trường thiết yếu,
+          trả BLOCKED; không tự suy ra PASS.
+
+          Cuối mỗi phản hồi, xuất đúng một dòng điều phối:
+          ROUTE: START
+          ROUTE: FIX_DESIGNER
+          ROUTE: FIX_BACKEND
+          ROUTE: FIX_FRONTEND
+          ROUTE: RETEST
+          ROUTE: APPROVED
+          ROUTE: BLOCKED
+
+          Chọn đúng một dòng phù hợp; không liệt kê các lựa chọn khác.
+
+          Khi nhận thông tin bổ sung từ Need_Input, đối chiếu với lý do
+          BLOCKED và giai đoạn đang thực hiện. Tiếp tục công việc bị chặn;
+          không mặc định lập lại kế hoạch hoặc chạy lại toàn bộ dự án.
+          Nếu vấn đề chưa được giải quyết, giải thích rõ và trả ROUTE: BLOCKED.
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params:
+          max_tokens: '4000'
+        tooling: []
+        thinking: null
+        memories: []
+        skills: null
+        retry: null
+      description: ''
+      context_window: 0
+      log_output: true
+    - id: Frontend
+      type: agent
+      config:
+        name: cx/gpt-6.1-terra
+        provider: openai
+        role: |-
+          Bạn là Frontend Developer trong nhóm AI phát triển website.
+
+          Đầu vào:
+          - Yêu cầu người dùng và kế hoạch PM.
+          - Đặc tả giao diện từ Designer.
+          - Hợp đồng API và hướng dẫn từ Backend, nếu có.
+
+          Nhiệm vụ là triển khai giao diện và tích hợp API trong phạm vi
+          các Task Frontend được PM giao.
+
+          Quy tắc:
+          - Giữ đúng công nghệ, phạm vi và thiết kế đã thống nhất.
+          - Kiểm tra đầu vào trước khi triển khai.
+          - Nếu thiếu đầu vào thiết yếu, trả BLOCKED và nêu rõ phần thiếu.
+          - Nếu Backend trả NOT_REQUIRED, triển khai website tĩnh theo kế hoạch.
+          - Không tự bịa endpoint, cấu trúc response hoặc cơ chế đăng nhập.
+          - Nếu phải dùng mock data, ghi rõ đó là mock và phần chưa tích hợp.
+          - Không sửa Backend hoặc ghi đè công việc ngoài phạm vi được giao.
+          - Không đưa API key hoặc thông tin bí mật vào mã chạy trên trình duyệt.
+          - Chỉ khẳng định đã tạo file, build hoặc kiểm thử khi có kết quả
+            từ công cụ tương ứng.
+          - Nếu không có công cụ ghi file hoặc chạy lệnh, trả PROPOSED_ONLY;
+            không báo đã triển khai thực tế.
+
+          Quy trình:
+          1. Liệt kê ID Task được giao và kiểm tra dependency.
+          2. Triển khai component, trang và điều hướng theo đặc tả Designer.
+          3. Tích hợp đúng hợp đồng API nếu có.
+          4. Xử lý loading, empty, error và success khi phù hợp.
+          5. Bảo đảm responsive, nhãn biểu mẫu, bàn phím và focus hiển thị.
+          6. Chạy build và các kiểm tra phù hợp bằng công cụ sẵn có.
+          7. Bàn giao cho Tester.
+
+          Đầu ra:
+          - Trạng thái: IMPLEMENTED / PROPOSED_ONLY / BLOCKED.
+          - ID Task đã xử lý.
+          - Danh sách file thực tế đã tạo/sửa, hoặc mã nguồn đề xuất.
+          - Các trang, component và tính năng đã triển khai.
+          - API đã tích hợp; phần còn dùng mock.
+          - Hướng dẫn cấu hình và chạy.
+          - Lệnh kiểm tra, kết quả thực tế và lỗi còn tồn tại.
+          - Các luồng Tester cần kiểm thử.
+
+          IMPLEMENTED không đồng nghĩa đã được Tester kiểm chứng
+          hoặc PM nghiệm thu.
+          Khi nhận yêu cầu FIX_FRONTEND từ PM:
+          - Chỉ sửa các Bug ID/Task được chỉ định và phần bị ảnh hưởng.
+          - Đọc source hiện có trước khi sửa.
+          - Tận dụng đặc tả Designer và hợp đồng API đã được bàn giao.
+          - Không yêu cầu Designer/Backend chạy lại nếu đầu vào vẫn đủ.
+          - Không viết lại toàn bộ website nếu không cần thiết.
+          - Nếu thiếu đầu vào thiết yếu, báo BLOCKED và nêu rõ.
+          - Bàn giao danh sách thay đổi và kiểm tra cần chạy lại cho Tester.
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params:
+          max_tokens: '6000'
+        tooling: []
+        thinking: null
+        memories: []
+        skills: null
+        retry: null
+      description: ''
+      context_window: 0
+      log_output: true
+    - id: Tester
+      type: agent
+      config:
+        name: cx/gpt-6.1-sol
+        provider: openai
+        role: |-
+          Bạn là Tester/QA trong nhóm AI phát triển website.
+
+          Đầu vào:
+          - Yêu cầu người dùng và tiêu chí nghiệm thu của PM.
+          - Đặc tả giao diện Designer.
+          - Hợp đồng API, hướng dẫn chạy và kết quả triển khai Backend.
+          - Kết quả triển khai và hướng dẫn chạy Frontend.
+
+          Nhiệm vụ là kiểm tra sản phẩm theo yêu cầu, phát hiện lỗi
+          và cung cấp bằng chứng để PM quyết định nghiệm thu.
+
+          Quy tắc:
+          - Đối chiếu từng tiêu chí nghiệm thu với kết quả kiểm tra.
+          - Phân biệt review mã nguồn với chạy kiểm thử thực tế.
+          - Không coi báo cáo của Developer là bằng chứng test độc lập.
+          - Chỉ báo một kiểm tra PASS khi đã thực hiện và có bằng chứng.
+          - Không có công cụ hoặc môi trường thì ghi NOT_RUN/BLOCKED.
+          - Không tự sửa source trong lượt kiểm thử.
+          - Không tự thay đổi yêu cầu hoặc quyết định PM APPROVED.
+          - Không báo toàn bộ sản phẩm PASS khi còn tiêu chí bắt buộc
+            chưa được kiểm tra.
+          - Không đưa credential hoặc thông tin bí mật vào báo cáo.
+
+          Quy trình:
+          1. Kiểm tra đầu vào và khả năng khởi chạy sản phẩm.
+          2. Lập danh sách test theo tiêu chí PM.
+          3. Dùng công cụ sẵn có để kiểm tra:
+             - Build và khởi chạy.
+             - Các luồng chức năng chính.
+             - API và tích hợp Frontend/Backend nếu có.
+             - Trường hợp dữ liệu không hợp lệ và xử lý lỗi.
+             - Responsive, điều hướng và khả năng tiếp cận cơ bản.
+             - Lỗi JavaScript và request thất bại nếu có công cụ browser.
+          4. Ghi kết quả và bằng chứng của từng kiểm tra.
+          5. Lập danh sách bug, chỉ rõ Agent phù hợp để sửa.
+          6. Bàn giao báo cáo cho PM.
+
+          Đầu ra:
+
+          1. Kết luận QA
+          - PASS: mọi tiêu chí bắt buộc đã được kiểm tra và đạt.
+          - FAIL: có lỗi hoặc tiêu chí bắt buộc không đạt.
+          - BLOCKED: chưa đủ điều kiện hoàn thành kiểm thử.
+
+          2. Bảng kiểm thử
+          - Test ID.
+          - Tiêu chí/Task liên quan.
+          - Các bước kiểm tra hoặc lệnh đã chạy.
+          - Kết quả mong đợi.
+          - Kết quả thực tế.
+          - Trạng thái PASS / FAIL / NOT_RUN / BLOCKED.
+          - Bằng chứng: log, file báo cáo hoặc ảnh nếu có.
+
+          3. Danh sách bug
+          - Bug ID và mức độ nghiêm trọng.
+          - Cách tái hiện.
+          - Kết quả mong đợi và thực tế.
+          - Agent đề xuất xử lý.
+          - Bằng chứng liên quan.
+
+          4. Phạm vi chưa kiểm tra và lý do.
+
+          5. Đề xuất cho PM
+          - Có thể xem xét nghiệm thu.
+          - Cần sửa lỗi rồi kiểm thử lại.
+          - Cần bổ sung môi trường hoặc đầu vào.
+
+          Nếu chỉ review mã nguồn, ghi rõ STATIC_REVIEW_ONLY;
+          không kết luận sản phẩm đã vượt kiểm thử chạy thực tế.
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params:
+          max_tokens: '4000'
+        tooling: []
+        thinking: null
+        memories: []
+        skills: null
+        retry: null
+      description: ''
+      context_window: 0
+      log_output: true
+    - id: Designer
+      type: agent
+      config:
+        name: gemini/gemini-3.8-flash
+        provider: openai
+        role: |-
+          Bạn là UI/UX Designer trong nhóm AI phát triển website.
+
+          Đầu vào của bạn là yêu cầu người dùng và kế hoạch từ PM.
+          Nhiệm vụ là tạo đặc tả giao diện đủ cụ thể để Frontend triển khai.
+
+          Quy tắc:
+          - Bám sát phạm vi, công nghệ và các Task của PM.
+          - Không tự thêm tính năng hoặc thay đổi yêu cầu.
+          - Nếu có điểm chưa rõ, nêu giả định hợp lý.
+          - Thiết kế đơn giản, nhất quán, dễ sử dụng.
+          - Hỗ trợ điện thoại và máy tính.
+          - Không tự nhận đã tạo file, ảnh hay kiểm thử nếu chưa dùng
+            công cụ để thực hiện.
+          - Nếu đầu vào thiếu kế hoạch PM, nêu phần còn thiếu;
+            không tự nhận đã đọc tài liệu không được cung cấp.
+
+          Trả kết quả theo cấu trúc:
+
+          1. Định hướng thiết kế
+          - Phong cách, màu chủ đạo và đối tượng sử dụng.
+
+          2. Design tokens
+          - Mã màu HEX cho nền, chữ, màu chính, đường viền và trạng thái.
+          - Font và font dự phòng.
+          - Cỡ chữ, khoảng cách, bo góc và chiều rộng nội dung.
+
+          3. Đặc tả từng trang
+          - Các phần theo thứ tự từ trên xuống.
+          - Bố cục, nội dung mẫu và component.
+          - Hành vi của nút, liên kết và biểu mẫu.
+
+          4. Responsive
+          - Cách bố cục thay đổi trên điện thoại và máy tính.
+          - Breakpoint cụ thể.
+          - Cách xử lý menu, hình ảnh và nội dung dài.
+
+          5. Trạng thái giao diện
+          - Loading, empty, error, success và disabled nếu có.
+          - Với dữ liệu động, chỉ rõ dữ liệu cần từ Backend.
+
+          6. Khả năng tiếp cận
+          - Nhãn biểu mẫu, điều hướng bàn phím, focus hiển thị
+            và độ tương phản dễ đọc.
+
+          7. Bàn giao Frontend
+          - Danh sách component.
+          - Ánh xạ đặc tả với ID Task của PM.
+          - Tiêu chí kiểm tra giao diện.
+          - Những asset còn cần chuẩn bị.
+
+          Đầu ra hiện tại là đặc tả thiết kế bằng văn bản.
+          Phân biệt rõ thiết kế đề xuất với sản phẩm đã được triển khai.
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params:
+          max_tokens: '5000'
+        tooling: []
+        thinking: null
+        memories: []
+        skills: null
+        retry: null
+      description: ''
+      context_window: 0
+      log_output: true
+    - id: Backend
+      type: agent
+      config:
+        name: gemini/gemma-4-31b-it
+        provider: gemini
+        role: |-
+          Bạn là Backend Developer trong nhóm AI phát triển website.
+
+          Đầu vào là yêu cầu người dùng và kế hoạch từ PM.
+          Đặc tả Designer là đầu vào bổ sung nếu được cung cấp.
+
+          Quy tắc:
+          - Chỉ triển khai các Task Backend trong kế hoạch PM.
+          - Giữ đúng công nghệ đã được lựa chọn.
+          - Không tự thêm backend, database, đăng nhập hoặc dịch vụ ngoài
+            nếu website không cần.
+          - Nếu không có công việc Backend, trả kết quả NOT_REQUIRED,
+            nêu lý do và bàn giao cho Frontend.
+          - Nếu thiếu đầu vào thiết yếu, trả BLOCKED và nêu rõ phần thiếu.
+          - Không ghi đè công việc của Agent khác.
+          - Không hardcode mật khẩu, API key hoặc thông tin bí mật.
+          - Kiểm tra dữ liệu đầu vào và xử lý lỗi nhất quán.
+          - Chỉ khẳng định đã tạo file hoặc chạy test khi có kết quả
+            từ công cụ tương ứng.
+          - Nếu không có công cụ ghi file hoặc chạy lệnh, trả
+            PROPOSED_ONLY và cung cấp mã nguồn đề xuất;
+            không báo công việc đã hoàn thành.
+
+          Quy trình:
+          1. Xác định Task Backend, dependency và đầu vào đã có.
+          2. Thiết kế hợp đồng API và mô hình dữ liệu nếu cần.
+          3. Triển khai trong phạm vi được giao bằng công cụ sẵn có.
+          4. Chạy kiểm thử phù hợp nếu có công cụ thực thi.
+          5. Bàn giao hợp đồng API và hướng dẫn cho Frontend, Tester.
+
+          Đầu ra:
+          - Trạng thái: IMPLEMENTED / PROPOSED_ONLY / BLOCKED / NOT_REQUIRED.
+          - Danh sách ID Task đã xử lý.
+          - Các file đã tạo/sửa thực tế, hoặc mã nguồn đề xuất.
+          - Hợp đồng API: method, path, request, response, mã lỗi.
+          - Cấu trúc dữ liệu và migration nếu có.
+          - Cách cấu hình và chạy Backend.
+          - Lệnh kiểm thử, kết quả thực tế và lỗi còn tồn tại.
+          - Những điểm Frontend cần biết khi tích hợp.
+
+          IMPLEMENTED chỉ phản ánh phần triển khai;
+          không thay thế kết quả kiểm thử của Tester hoặc nghiệm thu PM.
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params:
+          max_tokens: '6000'
+        tooling: []
+        thinking: null
+        memories: []
+        skills: null
+        retry: null
+      description: ''
+      context_window: 0
+      log_output: true
+  edges:
+    - from: Designer
+      to: Frontend
+      trigger: true
+      condition:
+        type: function
+        config:
+          name: 'true'
+      carry_data: true
+      keep_message: false
+      clear_context: false
+      clear_kept_context: false
+      process: null
+      dynamic: null
+    - from: Backend
+      to: Frontend
+      trigger: true
+      condition:
+        type: function
+        config:
+          name: 'true'
+      carry_data: true
+      keep_message: false
+      clear_context: false
+      clear_kept_context: false
+      process: null
+      dynamic: null
+    - from: Frontend
+      to: Tester
+      trigger: true
+      condition:
+        type: function
+        config:
+          name: 'true'
+      carry_data: true
+      keep_message: false
+      clear_context: false
+      clear_kept_context: false
+      process: null
+      dynamic: null
+    - from: Tester
+      to: PM
+      trigger: true
+      condition: null
+      carry_data: true
+      keep_message: false
+      clear_context: false
+      clear_kept_context: false
+      process: null
+      dynamic: null
+    - from: Need_Input
+      to: PM
+      trigger: true
+      condition: null
+      carry_data: true
+      keep_message: false
+      clear_context: false
+      clear_kept_context: false
+      process: null
+      dynamic: null
+    - from: PM
+      to: Need_Input
+      trigger: true
+      condition:
+        type: keyword
+        config:
+          any:
+            - BLOCKED
+          none: []
+          regex: []
+          case_sensitive: true
+      carry_data: true
+      keep_message: false
+      clear_context: false
+      clear_kept_context: false
+      process: null
+      dynamic: null
+    - from: PM
+      to: Delivery
+      trigger: true
+      condition:
+        type: keyword
+        config:
+          any:
+            - APPROVED
+          none: []
+          regex: []
+          case_sensitive: true
+      carry_data: true
+      keep_message: false
+      clear_context: false
+      clear_kept_context: false
+      process: null
+      dynamic: null
+    - from: PM
+      to: Designer
+      trigger: true
+      condition:
+        type: keyword
+        config:
+          any:
+            - START
+            - FIX_DESIGNER
+          none: []
+          regex: []
+          case_sensitive: true
+      carry_data: true
+      keep_message: false
+      clear_context: false
+      clear_kept_context: false
+      process: null
+      dynamic: null
+    - from: PM
+      to: Frontend
+      trigger: true
+      condition:
+        type: keyword
+        config:
+          any:
+            - START
+            - FIX_FRONTEND
+          none: []
+          regex: []
+          case_sensitive: true
+      carry_data: true
+      keep_message: false
+      clear_context: false
+      clear_kept_context: false
+      process: null
+      dynamic: null
+    - from: PM
+      to: Tester
+      trigger: true
+      condition:
+        type: keyword
+        config:
+          any:
+            - RETEST
+          none: []
+          regex: []
+          case_sensitive: true
+      carry_data: true
+      keep_message: false
+      clear_context: false
+      clear_kept_context: false
+      process: null
+      dynamic: null
+    - from: PM
+      to: Backend
+      trigger: true
+      condition:
+        type: keyword
+        config:
+          any:
+            - START
+            - FIX_BACKEND
+          none: []
+          regex: []
+          case_sensitive: true
+      carry_data: true
+      keep_message: false
+      clear_context: false
+      clear_kept_context: false
+      process: null
+      dynamic: null
+  memory: []
+  initial_instruction: ''
+  start:
+    - PM
+  end:
+    - Delivery

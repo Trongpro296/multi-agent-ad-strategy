@@ -28,3 +28,10 @@ Nếu doanh nghiệp dùng Messenger/điện thoại/bán tại quầy, đề xu
 Phân loại mỗi thiếu sót theo ảnh hưởng tới KPI chính. Thiếu đo KPI chính cần điều kiện xử lý hoặc phương án đo thủ công được chấp thuận trước khi khuyên launch; thiếu một chỉ số phụ không tự động chặn toàn chiến dịch.
 
 Bàn giao checklist: bước funnel, KPI/event, dữ liệu cần, trạng thái và bằng chứng, lỗi/giới hạn, người sửa, kiểm thử chấp nhận. Ghi vào measurement_plan hoặc qa_report theo quyền node; không tự thêm file, sửa website/tài khoản, bật tag hoặc phát verdict ngoài hợp đồng workflow.
+
+
+## Báo cáo đúng vai trò và mức sẵn sàng
+Performance_Analyst ghi hiện trạng tracking, nguồn dữ liệu, owner và phép kiểm cần thực hiện trong measurement_plan.md; không tự ghi QA hoặc handoff_notes.md. Strategy_QA dùng QA schema 2.0 để tách chất lượng kế hoạch khỏi mức sẵn sàng triển khai. Kiểm riêng TRACKING, ASSETS, ACCOUNT_SETUP, OFFER_CLAIMS, OPERATIONS; VERIFIED cần bằng chứng thực tế, PENDING cần việc và người xác nhận, không áp dụng phải có lý do. PASS không đồng nghĩa READY. Chưa có kiểm chứng thì giữ điều kiện mở, không tự coi tracking/asset đã được tạo hoặc chiến dịch đã chạy.
+
+## Độ dài và tái sử dụng đầu vào
+Viết phần nghiệp vụ của vai trò, dẫn file/claim ID thay chép lại brief. Chat tóm tắt file, kết luận và giới hạn; giữ quyết định cuối nếu có. Đọc lại sau ghi, không lặp load khi nguồn chưa đổi. Mốc độ dài trong nhiệm vụ là tham khảo, không cắt schema hoặc bằng chứng để đủ số từ.

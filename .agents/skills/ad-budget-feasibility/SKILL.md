@@ -31,3 +31,6 @@ Chọn đánh giá: khả thi trong giả định đã nêu, khả thi có đi�
 Ưu tiên giảm số kênh/biến thể, chạy nối tiếp, tập trung một mục tiêu hoặc đặt kỳ học thăm dò trước; giữ tổng chi trong trần. Đề xuất đổi ngân sách/mục tiêu phải ghi là cần người dùng quyết định, không tự cập nhật brief.
 
 Đưa bảng ngắn vào tài liệu node đang sở hữu: giả định và nguồn, hạng mục, phép tính, giới hạn, hành động và điều kiện xem lại. QA ghi phát hiện vào issue theo schema hiện có, không dùng dòng verdict của skill để thay QA: PASS/REVISE. Không tạo thêm file hoặc tự sửa bảng của node khác.
+
+## Độ dài và tái sử dụng đầu vào
+Viết phần nghiệp vụ của vai trò, dẫn file/claim ID thay chép lại brief. Chat tóm tắt file, kết luận và giới hạn; giữ quyết định cuối nếu có. Đọc lại sau ghi, không lặp load khi nguồn chưa đổi. Mốc độ dài trong nhiệm vụ là tham khảo, không cắt schema hoặc bằng chứng để đủ số từ.

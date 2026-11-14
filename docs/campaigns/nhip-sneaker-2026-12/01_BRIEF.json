@@ -1,0 +1,125 @@
+{
+  "project_name": "NHỊP Sneaker — Khởi động kênh bán hàng online",
+  "input_basis": "Thông số sản phẩm, giá, ngân sách và cách vận hành là quyết định chủ dự án ủy quyền trợ lý chốt. Không phải lịch sử kinh doanh hoặc chứng nhận tồn kho.",
+  "brand_name": "NHỊP Sneaker",
+  "product": "Sneaker cổ thấp phong cách tối giản, mã danh mục N01, phục vụ nhu cầu phối đồ hằng ngày.",
+  "benefits": [
+    "Thiết kế cổ thấp, hướng phối đồ tối giản là hướng sản phẩm đã chọn.",
+    "Hỗ trợ trao đổi mẫu, màu và size trước xác nhận đơn."
+  ],
+  "price": {
+    "currency": "VND",
+    "amount": 499000,
+    "unit": "đôi",
+    "publication_authorized": true,
+    "authorization_basis": "Giá bán được chốt theo yêu cầu người dùng tự điền toàn bộ thông số dự án; không phải giá tham khảo của đối thủ."
+  },
+  "offer": {
+    "id": "O1",
+    "description": "Một đôi sneaker N01, giá 499.000 VNĐ; không chạy giảm giá hoặc tặng quà. Phí giao hàng báo riêng trước xác nhận đơn.",
+    "discount": 0
+  },
+  "catalog_scope": {
+    "colors": [
+      "trắng",
+      "đen"
+    ],
+    "sizes": [
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43
+    ],
+    "meaning": "Phạm vi danh mục lựa chọn; xác nhận từng mẫu/màu/size với nguồn hàng trước khi nhận tiền. Không tuyên bố tồn đủ mọi size."
+  },
+  "market": "Bán lẻ online tại TP.HCM, tư vấn qua Messenger; chưa công bố địa chỉ cửa hàng vật lý.",
+  "region": "TP.HCM",
+  "language": "vi",
+  "goal": "G1: Tạo hội thoại Messenger đủ điều kiện; theo dõi đơn xác nhận, giao thành công và doanh thu thực thu riêng.",
+  "qualified_lead": "Một người ở TP.HCM cung cấp nhu cầu/mẫu, màu, size hoặc số đo và đồng ý trao đổi giá/giao hàng. Một người tính một lead chính trong 14 ngày; loại spam, tuyển dụng, chào bán.",
+  "start_date": "2026-12-01",
+  "end_date": "2026-12-14",
+  "budget": {
+    "currency": "VND",
+    "total": 7000000,
+    "ad_spend": 5600000,
+    "production": 1400000,
+    "other": 0
+  },
+  "budget_rules": [
+    "Trần quảng cáo 400.000 VNĐ/ngày trong 14 ngày; tổng tối đa 5.600.000 VNĐ.",
+    "Ngân sách sản xuất tối đa 1.400.000 VNĐ, không cộng vào ad_spend.",
+    "Giá vốn hàng, đóng gói và giao hàng là chi phí vận hành chưa có số liệu, không giả bằng 0."
+  ],
+  "channels": [
+    "Facebook Feed",
+    "Facebook Stories"
+  ],
+  "conversion_destination": "Messenger của Page được chủ dự án kết nối khi triển khai; CTA công khai Nhắn tin để chọn mẫu và size.",
+  "audience_decisions": {
+    "primary": "Người đi làm 22–30 tuổi tại TP.HCM quan tâm sneaker tối giản để phối đồ hằng ngày. Đây là lựa chọn nhắm mục tiêu của chiến dịch, không phải kết quả khảo sát.",
+    "secondary": "Người mua quà cần trao đổi size; không tách ngân sách riêng trong 14 ngày đầu."
+  },
+  "brand_voice": [
+    "rõ ràng",
+    "thân thiện",
+    "tối giản",
+    "không gây áp lực"
+  ],
+  "claims_allowed": [
+    "Giá 499.000 VNĐ/đôi là quyết định giá đã chốt.",
+    "Nhắn tin để trao đổi mẫu, màu, size và phí giao hàng trước khi xác nhận đơn."
+  ],
+  "claims_forbidden": [
+    "Không tự ghi da thật, đế cao su, chống trượt, chống nước, công nghệ giảm chấn hoặc trọng lượng khi chưa có tài liệu.",
+    "Không ghi hàng chính hãng của Ananas/Biti’s/Nike/Adidas, đại lý ủy quyền hoặc dùng logo của các hãng khác.",
+    "Không ghi đã có hàng nghìn khách, đánh giá 5 sao, bán chạy nhất, khan hiếm giả, giảm từ giá cũ không có thật.",
+    "Không dùng ảnh AI làm ảnh sản phẩm thật hoặc bằng chứng phản hồi khách hàng."
+  ],
+  "operations": {
+    "owner_role": "Chủ shop",
+    "inbox_hours": "09:00–21:00 hằng ngày",
+    "first_response_target": "Trong 30 phút trong giờ trực; ngoài giờ phản hồi ở ca kế tiếp. Đây là SLA vận hành được chọn.",
+    "order_flow": [
+      "Nhận nhu cầu và size",
+      "Kiểm mẫu/màu/size thực có",
+      "Gửi ảnh thật, giá, phí giao và điều kiện đổi",
+      "Khách xác nhận",
+      "Chỉ nhận thanh toán khi đã xác nhận có hàng và khả năng giao",
+      "Ghi nhận giao hàng và doanh thu thực thu"
+    ],
+    "size_exchange_policy": "Chấp nhận yêu cầu đổi size trong 7 ngày từ khi nhận; sản phẩm chưa sử dụng, còn hộp/tem và đáp ứng điều kiện kiểm tra. Phí đổi do chọn size được thông báo trước chốt đơn; shop xử lý chi phí lỗi giao sai từ phía shop. Không tự thêm cam kết giao hàng hoặc bảo hành chưa được chốt."
+  },
+  "actual_data": {
+    "previous_ad_spend": null,
+    "customers": null,
+    "orders": null,
+    "revenue": null,
+    "cpl": null,
+    "cpa": null,
+    "roas": null,
+    "status": "NO_OBSERVED_HISTORY",
+    "inventory_by_sku": null,
+    "unit_cost": null,
+    "real_product_photos": null
+  },
+  "readiness": {
+    "TRACKING": "PENDING",
+    "ASSETS": "PENDING",
+    "ACCOUNT_SETUP": "PENDING",
+    "OFFER_CLAIMS": "PENDING",
+    "OPERATIONS": "PENDING"
+  },
+  "deliverables": {
+    "social_posts": 6,
+    "video_scripts": 2,
+    "banners": 2,
+    "video_rendering": false,
+    "approval": "Một HUMAN: APPROVE duyệt kế hoạch và ủy quyền hoàn thiện toàn bộ đầu ra; không có Human duyệt lần hai.",
+    "public_package": "publish/; kịch bản ở production/; nguồn, dữ liệu và điều kiện nội bộ ở internal/."
+  }
+}

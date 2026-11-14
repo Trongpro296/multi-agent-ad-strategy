@@ -20,7 +20,7 @@ from runtime.node.executor.agent_executor import AgentNodeExecutor
 from runtime.node.executor.base import ExecutionContext
 from runtime.node.executor.human_executor import HumanNodeExecutor
 from tools.prepare_ad_recovery import build_recovery,restore_script
-from test_ad_agency_audit import fixture_files
+from test_ad_agency_audit import fixture_files, qa_fixture
 
 ROOT=Path(__file__).resolve().parents[1]
 VARIABLES=dict(BASE_URL='http://127.0.0.1:1/v1',API_KEY='offline',MODEL_STRONG='offline',MODEL_CHEAP='offline',MODEL_REVIEW='offline')
@@ -73,13 +73,14 @@ def prepare_source(tmp_path):
 
 
 def test_recovery_uses_existing_fifteen_files_and_only_four_pending_agents(tmp_path,monkeypatch):
+    monkeypatch.setenv('AD_BANNER_ENABLED','0')  # Never inherit a paid image opt-in in offline tests.
     source,log,template,originals=prepare_source(tmp_path)
     before={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in (source/'artifacts').iterdir()}
     untouched=copy.deepcopy(template)
     doc,manifest=build_recovery(template,source,log,'offline_source',creative_model='offline-recovery')
     assert template==untouched
     assert set(manifest['cached_agents'])==CACHED and len(manifest['files'])==15
-    assert set(manifest['pending_agents'])=={'Creative_Director','Plan_Assembler','Strategy_QA','Delivery_Packager'}
+    assert set(manifest['pending_agents'])=={'Creative_Director','Plan_Assembler','Strategy_QA','Delivery_Packager','Publication_Editor','Publication_QA'}
     assert next(n for n in doc['graph']['nodes'] if n['id']=='Creative_Director')['config']['name']=='offline-recovery'
     path=tmp_path/'recovery.yaml';path.write_text(yaml.safe_dump(doc,allow_unicode=True),encoding='utf-8')
     executed=[]
@@ -91,8 +92,16 @@ def test_recovery_uses_existing_fifteen_files_and_only_four_pending_agents(tmp_p
             for name in ('advertising_strategy_draft.md','execution_calendar.csv'):(folder/name).write_bytes(originals[name])
         elif node.id=='Strategy_QA':
             man=json.loads((folder.parent/'review/review_manifest.json').read_text())
-            (folder/'qa_report.json').write_text(json.dumps({'verdict':'PASS','plan_version':man['plan_version'],'plan_gate_status':'OK','issues':[]}),encoding='utf-8')
+            (folder/'qa_report.json').write_text(json.dumps(qa_fixture(man['plan_version'])),encoding='utf-8')
             return [Message(role=MessageRole.ASSISTANT,content='QA: PASS')]
+        elif node.id=='Publication_Editor':
+            from test_ad_publication import public_bundle_fixture
+            man=json.loads((folder.parent/'review/review_manifest.json').read_text())
+            (folder/'publication_content.json').write_text(json.dumps(public_bundle_fixture(folder.parent,man['plan_version']),ensure_ascii=False),encoding='utf-8')
+        elif node.id=='Publication_QA':
+            from test_ad_publication import public_qa_fixture
+            man=json.loads((folder.parent/'review/review_manifest.json').read_text())
+            (folder/'publication_qa.json').write_text(json.dumps(public_qa_fixture(folder.parent,man['plan_version'])),encoding='utf-8')
         elif node.id=='Delivery_Packager':(folder/'handoff_notes.md').write_text('OFFLINE FIXTURE ONLY',encoding='utf-8')
         else:raise AssertionError('Completed Agent must not call a model: '+node.id)
         return [Message(role=MessageRole.ASSISTANT,content='saved')]
@@ -101,10 +110,10 @@ def test_recovery_uses_existing_fifteen_files_and_only_four_pending_agents(tmp_p
     monkeypatch.setattr(HumanNodeExecutor,'execute',lambda self,node,inputs:[Message(role=MessageRole.USER,content='HUMAN: APPROVE')])
     monkeypatch.setattr(sdk,'OUTPUT_ROOT',tmp_path/'runs')
     result=sdk.run_workflow(path,task_prompt='ignored recovery launch note',variables=VARIABLES,session_name='session_offline_recovery')
-    assert set(executed)==set(manifest['pending_agents']) and len(executed)==4
+    assert set(executed)==set(manifest['pending_agents']) and len(executed)==6
     artifacts=result.meta_info.output_dir/'code_workspace/artifacts'
     for name,digest in before.items():assert hashlib.sha256((artifacts/name).read_bytes()).hexdigest()==digest
-    assert (result.meta_info.output_dir/'code_workspace/output/Campaign_Plan.xlsx').is_file()
+    assert (result.meta_info.output_dir/'code_workspace/output/internal/Campaign_Plan.xlsx').is_file()
     assert {p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in (source/'artifacts').iterdir()}==before
 
 
@@ -132,3 +141,21 @@ def test_corrupt_restore_payload_is_rejected_before_writing(tmp_path,monkeypatch
     monkeypatch.setenv('MAC_CODE_WORKSPACE',str(tmp_path))
     with pytest.raises(ValueError,match='hash mismatch'):exec(restore_script(archive),{})
     assert not (tmp_path/'artifacts/file.md').exists()
+
+
+@pytest.mark.parametrize('changed',[False,True])
+def test_snapshot_recovery_checks_hashes_without_synthesized_log(tmp_path,monkeypatch,changed):
+    from test_ad_agency_audit import run_gate
+    monkeypatch.chdir(tmp_path)
+    source=tmp_path/'snapshot';source.mkdir();fixture_files(source)
+    monkeypatch.chdir(source);run_gate(source)
+    template=yaml.safe_load((ROOT/'yaml_instance/ad_agency_v2.yaml').read_text(encoding='utf-8'))
+    if changed:
+        (source/'artifacts/media_plan.csv').write_text('modified')
+        with pytest.raises(ValueError,match='Snapshot source changed'):
+            build_recovery(template,source,None,'snapshot_source',from_snapshot=True,source_request='Preserve brief and fix QA issues')
+    else:
+        doc,manifest=build_recovery(template,source,None,'snapshot_source',from_snapshot=True,source_request='Preserve brief and fix QA issues')
+        assert manifest['cache_basis']=='verified_snapshot'
+        assert set(manifest['pending_agents'])=={'Plan_Assembler','Strategy_QA','Delivery_Packager','Publication_Editor','Publication_QA'}
+        assert len(manifest['files'])==18

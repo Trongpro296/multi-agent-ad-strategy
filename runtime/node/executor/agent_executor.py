@@ -39,6 +39,9 @@ from runtime.node.agent.skills import AgentSkillManager
 from utils.exceptions import SecurityError, ValidationError, WorkflowExecutionError
 from runtime.node.agent.providers.response import ProviderResponseError
 from utils.workspace_paths import resolve_workspace_path, validate_path_component
+from utils.ad_csv import CSVWriteValidationError
+from utils.ad_review_contracts import QAWriteValidationError
+from utils.ad_publication import PublicationWriteValidationError
 from tenacity import Retrying, retry_if_exception, stop_after_attempt, wait_random_exponential
 
 
@@ -225,6 +228,11 @@ class AgentNodeExecutor(NodeExecutor):
             messages.append(Message(role=MessageRole.SYSTEM, content=system_prompt))
 
         normalized_inputs = self._coerce_inputs_to_messages(inputs)
+        if self.context.global_state.get('ad_context_policy') == 'file_first_v1':
+            from utils.ad_context import optimize_ad_inputs
+            normalized_inputs, stats = optimize_ad_inputs(normalized_inputs, self.context.global_state, node.id)
+            if stats and self.context.token_tracker:
+                self.context.token_tracker.record_context_optimization(stats)
         if normalized_inputs:
             messages.extend(normalized_inputs)
         else:
@@ -369,22 +377,29 @@ class AgentNodeExecutor(NodeExecutor):
 
         agent_config = node.as_config(AgentConfig)
         retry_policy = self._resolve_retry_policy(node, agent_config)
+        diagnostic_path = None
 
         def _call_provider() -> ModelResponse:
-            return provider.call_model(
-                client,
-                conversation=conversation,
-                timeline=timeline,
-                tool_specs=tool_specs or None,
-                **call_options,
-            )
+            nonlocal diagnostic_path
+            self._ensure_not_cancelled()
+            try:
+                return provider.call_model(
+                    client,
+                    conversation=conversation,
+                    timeline=timeline,
+                    tool_specs=tool_specs or None,
+                    **call_options,
+                )
+            except ProviderResponseError as exc:
+                # Retain the failed response even if a subsequent attempt works.
+                diagnostic_path = self._save_provider_diagnostic(node, conversation, exc)
+                raise
 
         last_input = ''.join(msg.text_content() for msg in conversation) if conversation else ""
         self._record_model_call(node, last_input, None, CallStage.BEFORE)
         try:
             response = self._execute_with_retry(node, retry_policy, _call_provider)
         except ProviderResponseError as exc:
-            diagnostic_path = self._save_provider_diagnostic(node, conversation, exc)
             validator = self.context.global_state.get("node_result_validator")
             if exc.reason == "empty_response" and callable(validator):
                 # File-only completion is legitimate only when all required outputs
@@ -462,7 +477,23 @@ class AgentNodeExecutor(NodeExecutor):
             min=retry_config.min_wait_seconds,
             max=retry_config.max_wait_seconds,
         )
-        retry_condition = retry_if_exception(lambda exc: retry_config.should_retry(exc))
+        malformed_retries = 0
+
+        def should_retry(exc: BaseException) -> bool:
+            nonlocal malformed_retries
+            if (isinstance(exc, ProviderResponseError)
+                    and exc.reason == "malformed_function_call"
+                    and self.context.global_state.get("ad_malformed_retry_limit") == 1):
+                # Advertising-only exception to the broad ProviderResponseError
+                # exclusion. The provider returns before any tool is executed;
+                # retrying this call preserves the completed tool history.
+                if malformed_retries == 0:
+                    malformed_retries += 1
+                    return True
+                return False  # Never keep retrying malformed replies indefinitely.
+            return retry_config.should_retry(exc)
+
+        retry_condition = retry_if_exception(should_retry)
 
         def _before_sleep(retry_state) -> None:
             exc = retry_state.outcome.exception()
@@ -474,6 +505,9 @@ class AgentNodeExecutor(NodeExecutor):
                 "max_attempts": retry_config.max_attempts,
                 "exception": exc.__class__.__name__,
             }
+            if isinstance(exc, ProviderResponseError):
+                details["finish_reason"] = exc.reason
+                details["recovery"] = "retry_provider_turn_only; completed_tools_preserved"
             self.log_manager.warning(
                 f"[Node: {node.id}] Model call attempt {attempt} failed: {exc}",
                 node_id=node.id,
@@ -630,6 +664,7 @@ class AgentNodeExecutor(NodeExecutor):
         trace_messages: List[Message] = []
         loop_limit = self._get_tool_loop_limit(node)
         iteration = 0
+        csv_rejections: Dict[str, int] = {}
 
         while True:
             self._ensure_not_cancelled()
@@ -653,6 +688,7 @@ class AgentNodeExecutor(NodeExecutor):
                 assistant_message.tool_calls,
                 tool_specs,
                 skill_manager,
+                csv_rejections=csv_rejections,
             )
             conversation.extend(tool_call_messages)
             timeline.extend(tool_events)
@@ -675,11 +711,14 @@ class AgentNodeExecutor(NodeExecutor):
         tool_calls: List[ToolCallPayload],
         tool_specs: List[ToolSpec],
         skill_manager: AgentSkillManager | None,
+        csv_rejections: Dict[str, int] | None = None,
     ) -> tuple[List[Message], List[Any]]:
         """Execute a batch of tool calls and return conversation + timeline events."""
         messages: List[Message] = []
         events: List[Any] = []
         skill_followups: List[Message] = []
+        if csv_rejections is None:
+            csv_rejections = {}
         model = node.as_config(AgentConfig)
         
         # Build map for fast lookup
@@ -888,6 +927,14 @@ class AgentNodeExecutor(NodeExecutor):
                         {"error": str(exc), "arguments": arguments},
                         CallStage.AFTER,
                     )
+                    if isinstance(exc, (CSVWriteValidationError, QAWriteValidationError, PublicationWriteValidationError)):
+                        csv_rejections[exc.path] = csv_rejections.get(exc.path, 0) + 1
+                        if csv_rejections[exc.path] >= 3:
+                            raise WorkflowExecutionError(
+                                ('QA report' if isinstance(exc, QAWriteValidationError) else getattr(exc,'label','CSV')) + ' repair limit reached for ' + exc.path
+                                + ': initial write and two corrections rejected; ' + str(exc),
+                                node_id=node.id,
+                            ) from exc
                     tool_message = Message(
                         role=MessageRole.TOOL,
                         content=f"Tool {tool_name} error: {exc}",

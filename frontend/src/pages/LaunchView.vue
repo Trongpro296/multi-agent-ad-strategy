@@ -12,15 +12,23 @@
     </div>
     <div class="content">
       <!-- Left panel -->
-      <div class="left-panel">
+      <div ref="leftPanelRef" class="left-panel" :class="{ 'is-resizing-chat': resizingChat }">
         <!-- Chat and graph share the available width; message content stays inside its panel. -->
         <div
           class="chat-panel"
+          :style="viewMode === 'graph' && isChatPanelOpen ? { '--chat-panel-width': `${chatPanelWidth}px` } : {}"
           :class="{
             'chat-panel-fullscreen': viewMode === 'chat',
             'chat-panel-collapsed': viewMode !== 'chat' && !isChatPanelOpen
           }"
         >
+          <div v-if="viewMode === 'graph' && isChatPanelOpen" class="chat-panel-resizer"
+            role="separator" tabindex="0" aria-orientation="vertical" :aria-label="$t('launch.resize_chat')"
+            :aria-valuemin="320" :aria-valuemax="chatPanelMax" :aria-valuenow="chatPanelWidth"
+            @pointerdown.stop.prevent="startChatResize" @pointermove.stop="moveChatResize"
+            @pointerup.stop="endChatResize" @pointercancel="endChatResize" @lostpointercapture="endChatResize"
+            @keydown.left.prevent="adjustChatWidth(-20)" @keydown.right.prevent="adjustChatWidth(20)"
+            @keydown.home.prevent="setChatWidth(320)" @keydown.end.prevent="setChatWidth(chatPanelMax)"></div>
           <button v-show="viewMode !== 'chat'" class="chat-panel-toggle" @click="isChatPanelOpen = !isChatPanelOpen" :title="isChatPanelOpen ? $t('launch.collapse_chat') : $t('launch.expand_chat')">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" :class="{ 'chevron-collapsed': !isChatPanelOpen }">
               <polyline points="15 18 9 12 15 6"></polyline>
@@ -184,125 +192,12 @@
           </div>
             </div>
             <div class="input-area">
-              <div
-                :class="['input-shell', { glow: shouldGlow, 'drag-active': isDragActive }]"
-                @dragenter="handleDragEnter"
-                @dragover="handleDragOver"
-                @dragleave="handleDragLeave"
-                @drop="handleDrop"
-              >
-                <textarea
-                  v-autosize-textarea
-                  v-model="taskPrompt"
-                  class="task-input"
-                  :disabled="!isConnectionReady || (isWorkflowRunning && status !== 'Waiting for input...')"
-                  :placeholder="$t('launch.enter_prompt')"
-                  ref="taskInputRef"
-                  @keydown.enter="handleEnterKey"
-                  @paste="handlePaste"
-                ></textarea>
-                <div class="input-footer">
-                  <div class="input-footer-buttons">
-                    <div
-                      class="attachment-upload"
-                      @mouseenter="handleAttachmentHover(true)"
-                      @mouseleave="handleAttachmentHover(false)"
-                    >
-                      <div class="attachment-button-wrapper">
-                        <button
-                          type="button"
-                          class="attachment-button"
-                          :disabled="!isConnectionReady || !sessionId || isUploadingAttachment || (isWorkflowRunning && status !== 'Waiting for input...')"
-                          @click="handleAttachmentButtonClick"
-                        >
-                          {{ isUploadingAttachment ? $t('launch.uploading') : $t('launch.upload_file') }}
-                        </button>
-                        <span
-                          v-if="uploadedAttachments.length"
-                          class="attachment-count"
-                        >
-                          {{ uploadedAttachments.length }}
-                        </span>
-                      </div>
-                      <input
-                        ref="attachmentInputRef"
-                        type="file"
-                        class="hidden-file-input"
-                        @change="onAttachmentSelected"
-                      />
-                      <Transition name="attachment-popover">
-                        <div
-                          v-if="showAttachmentPopover"
-                          class="attachment-modal"
-                          @mouseenter="handleAttachmentHover(true)"
-                          @mouseleave="handleAttachmentHover(false)"
-                        >
-                          <div
-                            v-for="attachment in uploadedAttachments"
-                            :key="attachment.attachmentId"
-                            class="attachment-item"
-                          >
-                            <span class="attachment-name">{{ attachment.name }}</span>
-                            <button
-                              type="button"
-                              class="remove-attachment"
-                              @click.stop="removeAttachment(attachment.attachmentId)"
-                            >
-                              ×
-                            </button>
-                          </div>
-                          <div
-                            v-if="!uploadedAttachments.length"
-                            class="attachment-empty"
-                          >
-                            {{ $t('launch.no_files_uploaded') }}
-                          </div>
-                        </div>
-                      </Transition>
-                    </div>
-                    <button
-                      v-if="false"
-                      type="button"
-                      class="microphone-button"
-                      :class="{ 'recording': isRecording, 'pulsating': isRecording }"
-                      :disabled="!isConnectionReady || !sessionId || isUploadingAttachment || (isWorkflowRunning && status !== 'Waiting for input...')"
-                      @mousedown.prevent="startRecording"
-                      @mouseup.prevent="stopRecording"
-                      @mouseleave="handleMicrophoneMouseLeave"
-                      @touchstart.prevent="startRecording"
-                      @touchend.prevent="stopRecording"
-                    >
-                      <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <path
-                          d="M12 1C10.34 1 9 2.34 9 4V12C9 13.66 10.34 15 12 15C13.66 15 15 13.66 15 12V4C15 2.34 13.66 1 12 1Z"
-                          fill="currentColor"
-                        />
-                        <path
-                          d="M19 10V12C19 15.87 15.87 19 12 19C8.13 19 5 15.87 5 12V10H7V12C7 14.76 9.24 17 12 17C14.76 17 17 14.76 17 12V10H19Z"
-                          fill="currentColor"
-                        />
-                        <path
-                          d="M11 22H13V20H11V22Z"
-                          fill="currentColor"
-                        />
-                        <path
-                          d="M6 19H18V21H6V19Z"
-                          fill="currentColor"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-                <div v-if="isDragActive" class="drag-overlay">
-                  <div class="drag-overlay-content">{{ $t('launch.drop_files') }}</div>
-                </div>
-              </div>
+              <CampaignComposer ref="taskInputRef" v-model="taskPrompt"
+                :attachments="draftAttachments" :uploading="isUploadingAttachment"
+                :disabled="composerInputDisabled" :upload-disabled="composerInputDisabled"
+                :submit-disabled="!canSubmit" :submit-label="buttonLabel" :hint="composerHint"
+                :highlight="shouldGlow" @files="uploadFiles" @retry="retryAttachment"
+                @remove="removeAttachment" @preview="previewAttachment" @submit="handleButtonClick" />
             </div>
           </div>
         </div>
@@ -377,7 +272,7 @@
           type="text"
           class="file-selector-input"
           :placeholder="loading ? $t('launch.loading') : $t('launch.select_yaml')"
-          :disabled="loading || isWorkflowRunning"
+          :disabled="loading || isSubmitting || isWorkflowRunning"
           @focus="handleFileInputFocus"
           @input="handleFileInputChange"
           @keydown.enter.prevent="handleFileInputEnter"
@@ -442,7 +337,7 @@
               class="launch-button"
               :class="{ glow: shouldGlow, 'is-sending': isWorkflowRunning }"
               @click="handleButtonClick"
-              :disabled="loading || (isWorkflowRunning && !taskPrompt.trim()) || (!isWorkflowRunning && status !== 'Completed' && status !== 'Cancelled' && !isConnectionReady)">
+              :disabled="!canSubmit" :title="composerHint">
               {{ buttonLabel }}
             </button>
 
@@ -491,7 +386,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import vAutosizeTextarea from '../utils/autosizeTextarea'
+import { createAttachmentQueue } from '../utils/composerAttachments'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { fetchWorkflowsWithDesc, fetchLogsZip, fetchWorkflowYAML, postFile, getAttachment, fetchVueGraph } from '../utils/apiFunctions.js'
@@ -525,11 +420,12 @@ import WorkflowNode from '../components/WorkflowNode.vue'
 import WorkflowEdge from '../components/WorkflowEdge.vue'
 import StartNode from '../components/StartNode.vue'
 import CollapsibleMessage from '../components/CollapsibleMessage.vue'
+import CampaignComposer from '../components/CampaignComposer.vue'
 
 const router = useRouter()
 const route = useRoute()
 const { t } = useI18n()
-const { fromObject, fitView, onPaneReady, onNodesInitialized, setNodes, setEdges, nodes, edges } = useVueFlow()
+const { fromObject, fitView, onPaneReady, onNodesInitialized, setNodes, setEdges, edges } = useVueFlow()
 
 const getTranslatedStatus = (statusText) => {
   if (!statusText) return ''
@@ -716,20 +612,12 @@ const nodeSpriteMap = ref(new Map())
 // Input glow state
 const shouldGlow = ref(false)
 const taskInputRef = ref(null)
-const attachmentInputRef = ref(null)
-const uploadedAttachments = ref([])
-const isDragActive = ref(false)
-const showAttachmentPopover = ref(false)
-const isUploadingAttachment = ref(false)
-let attachmentHoverTimeout = null
+const attachmentQueue = createAttachmentQueue(postFile)
+const draftAttachments = attachmentQueue.attachments
+const uploadedAttachments = attachmentQueue.readyAttachments
+const isUploadingAttachment = attachmentQueue.isUploading
+const isSubmitting = ref(false)
 const selectedArtifactImage = ref(null)
-let dragDepth = 0
-
-// Recording state
-const isRecording = ref(false)
-let mediaRecorder = null
-let audioChunks = []
-let audioStream = null
 
 // WebSocket readiness state
 const isConnectionReady = ref(false)
@@ -738,7 +626,39 @@ const showSettingsModal = ref(false)
 // View mode
 const viewMode = ref('chat')
 const isChatPanelOpen = ref(true)
+const leftPanelRef = ref(null)
+const leftPanelWidth = ref(window.innerWidth)
+const resizingChat = ref(false)
+let panelObserver
+let resizeOrigin = null
+const readChatWidth = () => {
+  try { const value = Number(localStorage.getItem('launch.graphChatWidth')); return Number.isFinite(value) && value >= 320 ? value : 420 }
+  catch { return 420 }
+}
+const preferredChatWidth = ref(readChatWidth())
+const chatPanelMax = computed(() => Math.max(320, Math.floor(leftPanelWidth.value * .5)))
+const chatPanelWidth = computed(() => Math.max(320, Math.min(preferredChatWidth.value, chatPanelMax.value)))
+const setChatWidth = (width) => {
+  preferredChatWidth.value = Math.max(320, Math.min(width, chatPanelMax.value))
+  try { localStorage.setItem('launch.graphChatWidth', String(preferredChatWidth.value)) } catch { /* Storage may be unavailable. */ }
+}
+const adjustChatWidth = (delta) => setChatWidth(chatPanelWidth.value + delta)
+const startChatResize = (event) => {
+  if (event.button !== 0) return
+  resizeOrigin = { pointerId: event.pointerId, x: event.clientX, width: chatPanelWidth.value }
+  resizingChat.value = true
+  event.currentTarget.setPointerCapture(event.pointerId)
+}
+const moveChatResize = (event) => {
+  if (resizeOrigin?.pointerId === event.pointerId) setChatWidth(resizeOrigin.width + event.clientX - resizeOrigin.x)
+}
+const endChatResize = () => { resizeOrigin = null; resizingChat.value = false }
+
 const isRightPanelOpen = ref(true)
+const keepNarrowComposerVisible = () => {
+  if (window.innerWidth <= 640 && viewMode.value === 'graph') isRightPanelOpen.value = false
+}
+
 
 // WebSocket reference
 let ws = null
@@ -761,7 +681,7 @@ const filteredWorkflowFiles = computed(() => {
 // Button label computed property
 const buttonLabel = computed(() => {
   if (isWorkflowRunning.value) {
-    return t('launch.send')
+    return status.value === 'Waiting for input...' ? t('launch.composer_reply') : t('launch.status_running')
   }
   if (status.value === 'Completed' || status.value === 'Cancelled') {
     return t('launch.relaunch')
@@ -769,12 +689,27 @@ const buttonLabel = computed(() => {
   return t('launch.launch_button')
 })
 
+const isTerminalRun = computed(() => ['Completed', 'Cancelled'].includes(status.value))
+const composerInputDisabled = computed(() => !isConnectionReady.value || loading.value || isSubmitting.value || isReconnecting.value
+  || isTerminalRun.value || (isWorkflowRunning.value && status.value !== 'Waiting for input...'))
+const canSubmit = computed(() => {
+  if (loading.value || isSubmitting.value || isUploadingAttachment.value || attachmentQueue.hasErrors.value) return false
+  if (isTerminalRun.value) return Boolean(selectedFile.value)
+  return !composerInputDisabled.value && Boolean(taskPrompt.value.trim() || uploadedAttachments.value.length)
+})
+const composerHint = computed(() => {
+  if (isUploadingAttachment.value) return t('launch.composer_uploading_hint')
+  if (attachmentQueue.hasErrors.value) return t('launch.composer_error_hint')
+  if (isTerminalRun.value) return t('launch.composer_relaunch_hint')
+  if (!selectedFile.value) return t('launch.alert_choose_workflow')
+  if (!isConnectionReady.value) return t('launch.composer_connecting_hint')
+  if (isSubmitting.value) return t('launch.composer_sending_hint')
+  if (isWorkflowRunning.value && status.value !== 'Waiting for input...') return t('launch.composer_running_hint')
+  return t('launch.composer_keyboard_hint')
+})
 const clearUploadedAttachments = () => {
-  uploadedAttachments.value = []
-  showAttachmentPopover.value = false
-  if (attachmentInputRef.value) {
-    attachmentInputRef.value.value = ''
-  }
+  if (draftAttachments.value.some((item) => item.previewUrl === selectedArtifactImage.value?.src)) closeImageModal()
+  attachmentQueue.clear()
 }
 
 // Reset the WebSocket connection and related state
@@ -802,10 +737,6 @@ const resetConnectionState = ({ closeSocket = true, keepSession = false } = {}) 
     nodeSpriteMap.value.clear()
   }
 
-  if (attachmentHoverTimeout) {
-    clearTimeout(attachmentHoverTimeout)
-    attachmentHoverTimeout = null
-  }
 }
 
 // Button state management
@@ -820,7 +751,7 @@ const hoveredNodeId = ref(null)
 const onNodeHover = (nodeId) => {
   hoveredNodeId.value = nodeId || null
 }
-const onNodeLeave = (_nodeId) => {
+const onNodeLeave = () => {
   hoveredNodeId.value = null
 }
 
@@ -868,7 +799,7 @@ const loadWorkflows = async () => {
 }
 
 const openFileDropdown = () => {
-  if (loading.value || isWorkflowRunning.value) {
+  if (loading.value || isSubmitting.value || isWorkflowRunning.value) {
     return
   }
   isFileDropdownOpen.value = true
@@ -883,7 +814,7 @@ const handleFileInputFocus = () => {
 }
 
 const handleFileInputChange = () => {
-  if (loading.value || isWorkflowRunning.value) {
+  if (loading.value || isSubmitting.value || isWorkflowRunning.value) {
     return
   }
   isFileSearchDirty.value = true
@@ -997,218 +928,21 @@ const formatDuration = (startedAt, endedAt = null) => {
   return `${minutes}:${seconds}`
 }
 
-const isAttachmentUploadAllowed = () => {
-  if (!isConnectionReady.value || !sessionId || isUploadingAttachment.value) {
-    return false
-  }
-  if (isWorkflowRunning.value && status.value !== 'Waiting for input...') {
-    return false
-  }
-  return true
-}
-
-const handleAttachmentButtonClick = () => {
-  if (!isAttachmentUploadAllowed()) {
-    return
-  }
-  attachmentInputRef.value?.click()
-}
-
 const uploadFiles = async (files) => {
-  if (!files || files.length === 0) {
-    return
-  }
-
-  if (!sessionId) {
-    alert(t('launch.alert_session_not_ready'))
-    return
-  }
-
-  isUploadingAttachment.value = true
-  try {
-    for (const file of files) {
-      try {
-        const result = await postFile(sessionId, file)
-
-        if (result?.success && result?.attachmentId) {
-          console.log('File uploaded successfully:', result)
-          uploadedAttachments.value.push(result)
-        } else {
-          console.error('File upload failed:', result)
-          alert(result?.message || t('launch.alert_failed_upload'))
-        }
-      } catch (error) {
-        console.error('Failed to upload attachment:', error)
-        alert(t('launch.alert_file_upload_failed'))
-      }
-    }
-  } finally {
-    isUploadingAttachment.value = false
-  }
+  if (composerInputDisabled.value || isUploadingAttachment.value) return
+  await attachmentQueue.addFiles(files, sessionId)
 }
-
-const onAttachmentSelected = async (event) => {
-  const file = event.target?.files?.[0]
-  if (event.target) {
-    event.target.value = ''
-  }
-
-  if (!file) {
-    return
-  }
-
-  await uploadFiles([file])
+const retryAttachment = async (id) => {
+  if (composerInputDisabled.value) return
+  await attachmentQueue.retry(id, sessionId)
 }
-
-const removeAttachment = (attachmentId) => {
-  uploadedAttachments.value = uploadedAttachments.value.filter(
-    (attachment) => attachment.attachmentId !== attachmentId
-  )
+const removeAttachment = (id) => {
+  const item = draftAttachments.value.find((entry) => entry.id === id)
+  if (item?.previewUrl && selectedArtifactImage.value?.src === item.previewUrl) closeImageModal()
+  attachmentQueue.remove(id)
 }
-
-const startRecording = async () => {
-  if (!isConnectionReady.value || !sessionId || isUploadingAttachment.value || isRecording.value) {
-    return
-  }
-
-  // Add global listeners to ensure recording stops even if mouse leaves button
-  window.addEventListener('mouseup', stopRecordingGlobal)
-  window.addEventListener('touchend', stopRecordingGlobal)
-
-  try {
-    // Request microphone access
-    audioStream = await navigator.mediaDevices.getUserMedia({ audio: true })
-
-    // Check for MP3 support, fallback to webm
-    const mimeTypes = ['audio/mpeg', 'audio/wav', 'audio/webm', 'audio/ogg']
-    let selectedMimeType = 'audio/webm'
-
-    for (const mimeType of mimeTypes) {
-      if (MediaRecorder.isTypeSupported(mimeType)) {
-        selectedMimeType = mimeType
-        break
-      }
-    }
-
-    mediaRecorder = new MediaRecorder(audioStream, {
-      mimeType: selectedMimeType
-    })
-
-    audioChunks = []
-
-    mediaRecorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        audioChunks.push(event.data)
-      }
-    }
-
-    mediaRecorder.onstop = async () => {
-      if (audioChunks.length === 0) {
-        cleanupRecording()
-        return
-      }
-
-      // Create blob from audio chunks
-      const audioBlob = new Blob(audioChunks, { type: selectedMimeType })
-
-      // Generate filename with current time
-      const now = new Date()
-      const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, -5)
-      const filename = `recording_${timestamp}.${selectedMimeType.split('/')[1]}`
-
-      // Create File object from blob
-      const audioFile = new File([audioBlob], filename, { type: selectedMimeType })
-
-      // Upload the file
-      try {
-        isUploadingAttachment.value = true
-        const result = await postFile(sessionId, audioFile)
-
-        if (result?.success && result?.attachmentId) {
-          console.log('Recording uploaded successfully:', result)
-          uploadedAttachments.value.push(result)
-        } else {
-          console.error('Recording upload failed:', result)
-          alert(result?.message || 'Failed to upload recording')
-        }
-      } catch (error) {
-        console.error('Failed to upload recording:', error)
-        alert(t('launch.alert_recording_upload_failed'))
-      } finally {
-        isUploadingAttachment.value = false
-        cleanupRecording()
-      }
-    }
-
-    mediaRecorder.onerror = (event) => {
-      console.error('MediaRecorder error:', event.error)
-      alert(t('launch.alert_recording_error'))
-      cleanupRecording()
-    }
-
-    mediaRecorder.start()
-    isRecording.value = true
-  } catch (error) {
-    console.error('Failed to start recording:', error)
-    alert(t('launch.alert_mic_access_failed'))
-    cleanupRecording()
-  }
-}
-
-const stopRecording = () => {
-  if (mediaRecorder && isRecording.value && mediaRecorder.state !== 'inactive') {
-    mediaRecorder.stop()
-    isRecording.value = false
-  }
-  removeGlobalListeners()
-}
-
-const stopRecordingGlobal = () => {
-  stopRecording()
-}
-
-const removeGlobalListeners = () => {
-  window.removeEventListener('mouseup', stopRecordingGlobal)
-  window.removeEventListener('touchend', stopRecordingGlobal)
-}
-
-const handleMicrophoneMouseLeave = (event) => {
-  // If mouse leaves while recording, don't stop (let global listener handle it)
-  // This allows recording to continue if user drags outside button
-}
-
-const cleanupRecording = () => {
-  removeGlobalListeners()
-  if (audioStream) {
-    audioStream.getTracks().forEach(track => track.stop())
-    audioStream = null
-  }
-  mediaRecorder = null
-  audioChunks = []
-  isRecording.value = false
-}
-
-const handleAttachmentHover = (isHovering) => {
-  if (isHovering) {
-    if (attachmentHoverTimeout) {
-      clearTimeout(attachmentHoverTimeout)
-      attachmentHoverTimeout = null
-    }
-
-    if (uploadedAttachments.value.length > 0) {
-      showAttachmentPopover.value = true
-    }
-    return
-  }
-
-  if (attachmentHoverTimeout) {
-    clearTimeout(attachmentHoverTimeout)
-  }
-
-  attachmentHoverTimeout = setTimeout(() => {
-    showAttachmentPopover.value = false
-    attachmentHoverTimeout = null
-  }, 140)
+const previewAttachment = (item) => {
+  if (item.previewUrl) openImageModal({ dataUri: item.previewUrl, fileName: item.name })
 }
 
 const lockBodyScroll = () => {
@@ -1246,98 +980,6 @@ const handleKeydown = (event) => {
   if (event.key === 'Escape' && selectedArtifactImage.value) {
     closeImageModal()
   }
-}
-
-const handleEnterKey = (e) => {
-  if (e.metaKey || e.ctrlKey) {
-    // Check disabled state logically similar to button
-    if (loading.value || (isWorkflowRunning.value && !taskPrompt.value.trim()) || (!isWorkflowRunning.value && status.value !== 'Completed' && status.value !== 'Cancelled' && !isConnectionReady.value)) {
-       return
-    }
-    handleButtonClick()
-  }
-}
-
-// Handle paste events, including file uploads
-const handlePaste = async (event) => {
-  // Check if upload is allowed
-  if (!isAttachmentUploadAllowed()) {
-    return
-  }
-
-  // Get clipboard data
-  const clipboardData = event.clipboardData
-  if (!clipboardData) {
-    return
-  }
-
-  // Check whether the clipboard contains files
-  const files = clipboardData.files
-  if (!files || files.length === 0) {
-    return
-  }
-
-  // Prevent default paste to avoid inserting text
-  event.preventDefault()
-
-  // Upload all pasted files
-  await uploadFiles(files)
-}
-
-const isFileDragEvent = (event) => {
-  const types = event?.dataTransfer?.types
-  if (!types) {
-    return false
-  }
-  return Array.from(types).includes('Files')
-}
-
-const handleDragEnter = (event) => {
-  if (!isFileDragEvent(event) || !isAttachmentUploadAllowed()) {
-    return
-  }
-  dragDepth += 1
-  isDragActive.value = true
-  event.preventDefault()
-}
-
-const handleDragOver = (event) => {
-  if (!isFileDragEvent(event) || !isAttachmentUploadAllowed()) {
-    return
-  }
-  event.preventDefault()
-  if (event.dataTransfer) {
-    event.dataTransfer.dropEffect = 'copy'
-  }
-}
-
-const handleDragLeave = (event) => {
-  if (!isFileDragEvent(event)) {
-    return
-  }
-  dragDepth = Math.max(0, dragDepth - 1)
-  if (dragDepth === 0) {
-    isDragActive.value = false
-  }
-}
-
-const handleDrop = async (event) => {
-  if (!isFileDragEvent(event)) {
-    return
-  }
-  event.preventDefault()
-  dragDepth = 0
-  isDragActive.value = false
-
-  if (!isAttachmentUploadAllowed()) {
-    return
-  }
-
-  const files = Array.from(event.dataTransfer?.files || [])
-  if (files.length === 0) {
-    return
-  }
-  await uploadFiles(files)
 }
 
 // Handle YAML file selection
@@ -1393,35 +1035,37 @@ const handleYAMLSelection = async (fileName) => {
 }
 
 // Handle button clicks
-const handleButtonClick = () => {
-  if (isWorkflowRunning.value) {
-    // If Send, send user input
-    sendHumanInput()
-
-    status.value = "Running..."
-    shouldGlow.value = false
-  } else if (status.value === 'Completed' || status.value === 'Cancelled') {
-    // If Relaunch, restart the same workflow and re-enter Launch state
-    if (!selectedFile.value) {
-      alert(t('launch.alert_choose_workflow'))
-      return
+const handleButtonClick = async () => {
+  if (!canSubmit.value) return
+  isSubmitting.value = true
+  try {
+    if (isWorkflowRunning.value) {
+      if (sendHumanInput()) {
+        status.value = 'Running...'
+        shouldGlow.value = false
+      }
+    } else if (isTerminalRun.value) {
+      resetConnectionState()
+      status.value = 'Connecting...'
+      const query = { ...route.query }
+      delete query.session
+      await router.replace({ query })
+      await handleYAMLSelection(selectedFile.value)
+      establishWebSocketConnection()
+    } else {
+      await launchWorkflow()
     }
-
-    resetConnectionState()
-    status.value = 'Connecting...'
-    handleYAMLSelection(selectedFile.value)
-    establishWebSocketConnection()
-  } else {
-    // If Launch, start the workflow
-    launchWorkflow()
+  } catch (error) {
+    console.error('Unable to send draft:', error)
+    addChatNotification(t('launch.composer_send_error'), { type: 'error' })
+  } finally {
+    isSubmitting.value = false
   }
 }
 
 // Send human input
 const sendHumanInput = () => {
-  if (!ws) {
-    return
-  }
+  if (!ws || ws.readyState !== WebSocket.OPEN || status.value !== 'Waiting for input...') return false
 
   const trimmedInput = taskPrompt.value.trim()
   const attachmentIds = uploadedAttachments.value.map((attachment) => attachment.attachmentId)
@@ -1441,8 +1085,8 @@ const sendHumanInput = () => {
     }
   }
 
-  clearUploadedAttachments()
   ws.send(JSON.stringify(message))
+  clearUploadedAttachments()
 
   const fullMessage = []
   if (trimmedInput) {
@@ -1457,6 +1101,7 @@ const sendHumanInput = () => {
   }
 
   taskPrompt.value = ''
+  return true
 }
 
 // Establish a WebSocket connection
@@ -1594,15 +1239,6 @@ watch(selectedFile, (newFile) => {
 })
 
 watch(
-  () => uploadedAttachments.value.length,
-  (length) => {
-    if (!length) {
-      showAttachmentPopover.value = false
-    }
-  }
-)
-
-watch(
   () => route.query?.workflow,
   () => {
     applyWorkflowFromRoute()
@@ -1610,6 +1246,9 @@ watch(
 )
 
 onMounted(async () => {
+  panelObserver = new ResizeObserver(([entry]) => { leftPanelWidth.value = entry.contentRect.width })
+  if (leftPanelRef.value) panelObserver.observe(leftPanelRef.value)
+  window.addEventListener('resize', keepNarrowComposerVisible)
   document.addEventListener('click', handleClickOutside)
   document.addEventListener('keydown', handleKeydown)
   await loadWorkflows()
@@ -1624,11 +1263,13 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  panelObserver?.disconnect()
+  endChatResize()
+  window.removeEventListener('resize', keepNarrowComposerVisible)
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('keydown', handleKeydown)
   unlockBodyScroll()
   resetConnectionState()
-  cleanupRecording()
 
   stopLoadingTimer()
   runningLoadingEntries.value = 0
@@ -1838,6 +1479,7 @@ const loadVueFlowGraph = async ({ fit = false } = {}) => {
 
 const switchToGraph = async () => {
   viewMode.value = 'graph'
+  keepNarrowComposerVisible()
   await nextTick()
   await loadVueFlowGraph({ fit: true })
 }
@@ -1861,6 +1503,7 @@ const launchWorkflow = async () => {
 
   if (
     !ws ||
+    ws.readyState !== WebSocket.OPEN ||
     !isConnectionReady.value ||
     !sessionId
   ) {
@@ -1884,10 +1527,8 @@ const launchWorkflow = async () => {
     })
 
     if (response.ok) {
-      // Clear uploaded attachments
-      clearUploadedAttachments()
-
       const result = await response.json()
+      clearUploadedAttachments()
       console.log('Workflow launched: ', result)
 
       const fullMessage = []
@@ -2395,7 +2036,7 @@ const getFilePreviewSrc = (message) => {
       return message.dataUri
     }
     return getPreviewIconByExt(fileName, mimeType)
-  } catch (e) {
+  } catch {
     return ''
   }
 }
@@ -2429,7 +2070,7 @@ const svgIconDataUri = (label, bgColor) => {
   <svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'>
     <defs>
       <style>
-        .t{font: 700 16px \"Inter, Arial\"; fill: #f2f2f2}
+        .t{font: 700 16px "Inter, Arial"; fill: #f2f2f2}
       </style>
     </defs>
     <rect x='0' y='0' width='48' height='48' rx='8' ry='8' fill='${bgColor}' />
@@ -2544,11 +2185,17 @@ watch(
   position: relative;
 }
 
+
+.chat-panel-resizer { position: absolute; top: 48px; right: -7px; bottom: 0; width: 12px; z-index: 12; pointer-events: auto; touch-action: none; cursor: col-resize; border-radius: 5px; }
+.chat-panel-resizer::after { content: ''; position: absolute; left: 5px; top: 0; bottom: 0; width: 2px; background: transparent; }
+.chat-panel-resizer:hover::after, .chat-panel-resizer:focus-visible::after, .is-resizing-chat .chat-panel-resizer::after { background: #99d4ff; }
+.is-resizing-chat, .is-resizing-chat * { cursor: col-resize !important; user-select: none; }
+
 /* Persistent Chat Panel */
 .chat-panel {
   position: relative;
-  width: clamp(480px, 30vw, 520px);
-  max-width: 65%;
+  width: var(--chat-panel-width, 420px);
+  max-width: 50%;
   min-width: 0;
   min-height: 0;
   flex: 0 0 auto;
@@ -3041,246 +2688,6 @@ watch(
   min-height: 0;
 }
 
-.input-shell {
-  height: auto;
-  display: flex;
-  flex-direction: row;
-  background-color: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  transition: all 0.3s ease;
-  backdrop-filter: blur(5px);
-  position: relative;
-}
-
-.input-shell:focus-within {
-  border-color: rgba(255, 255, 255, 0.3);
-  background-color: rgba(255, 255, 255, 0.05);
-}
-
-.input-shell.glow {
-  border-color: #aaffcd;
-  box-shadow: 0 0 15px rgba(153, 234, 249, 0.3);
-  animation: borderPulse 4s ease-in-out infinite alternate;
-}
-
-.input-shell.drag-active {
-  border-color: rgba(153, 234, 249, 0.9);
-  background-color: rgba(153, 234, 249, 0.08);
-  box-shadow: 0 0 20px rgba(153, 234, 249, 0.35);
-}
-
-.drag-overlay {
-  position: absolute;
-  inset: 6px;
-  border-radius: 10px;
-  border: 1px dashed rgba(153, 234, 249, 0.6);
-  background: rgba(10, 20, 24, 0.55);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-}
-
-.drag-overlay-content {
-  font-size: 12px;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
-  color: rgba(153, 234, 249, 0.95);
-}
-
-@keyframes borderPulse {
-  0% { border-color: #aaffcd; box-shadow: 0 0 0px rgba(170, 255, 205, 0.15); }
-  50% { border-color: #99eaf9; box-shadow: 0 0 8px rgba(153, 234, 249, 0.35); }
-   100% { border-color: #a0c4ff; box-shadow: 0 0 0px rgba(160, 196, 255, 0.2); }
-}
-
-.task-input {
-  flex: 1;
-  min-width: 0;
-  box-sizing: border-box;
-  min-height: min(180px, 25dvh);
-  max-height: 35dvh;
-  overflow-y: auto;
-  padding: 16px;
-  border: none;
-  font-family: 'Inter', sans-serif;
-  font-size: 14px;
-  resize: none;
-  outline: none;
-  background: transparent;
-  color: #f2f2f2;
-  line-height: 1.5;
-}
-
-.task-input::placeholder {
-  color: rgba(255, 255, 255, 0.3);
-}
-
-.input-footer {
-  display: flex;
-  justify-content: flex-end;
-  padding: 10px 12px 10px 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.input-footer-buttons {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  flex-direction: column;
-  height: 100%;
-}
-
-.microphone-button {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.8);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  padding: 0;
-  outline: none;
-  position: relative;
-}
-
-.microphone-button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.4);
-  color: #f2f2f2;
-}
-
-.microphone-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.microphone-button.recording {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: #aaffcd;
-  color: #f2f2f2;
-}
-
-.microphone-button.pulsating {
-  animation: microphonePulse 2s ease-in-out infinite;
-}
-
-@keyframes microphonePulse {
-  0% {
-    box-shadow:
-      0 0 0 0 rgba(170, 255, 205, 0.7),
-      0 0 0 0 rgba(153, 234, 249, 0.5);
-    border-color: #aaffcd;
-  }
-  50% {
-    box-shadow:
-      0 0 0 12px rgba(170, 255, 205, 0),
-      0 0 0 6px rgba(153, 234, 249, 0.3);
-    border-color: #99eaf9;
-  }
-  100% {
-    box-shadow:
-      0 0 0 24px rgba(170, 255, 205, 0),
-      0 0 0 18px rgba(153, 234, 249, 0);
-    border-color: #aaffcd;
-  }
-}
-
-.attachment-upload {
-  position: relative;
-}
-
-.attachment-button-wrapper {
-  position: relative;
-  display: inline-block;
-}
-
-.attachment-button {
-  padding: 6px 16px;
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.8);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
-
-.attachment-button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.4);
-  color: #f2f2f2;
-}
-
-.attachment-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.hidden-file-input {
-  display: none;
-}
-
-.attachment-count {
-  position: absolute;
-  top: -8px;
-  right: -6px;
-  background: #99eaf9;
-  color: #1a1a1a;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 10px;
-}
-
-/* Attachment Modal */
-.attachment-modal {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 10px);
-  width: 240px;
-  background: #252525;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  padding: 8px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  z-index: 10;
-}
-
-.attachment-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 10px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 4px;
-}
-
-.attachment-name {
-  font-size: 12px;
-  color: #e0e0e0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.remove-attachment {
-  border: none;
-  background: transparent;
-  color: #99eaf9;
-  cursor: pointer;
-  padding: 0 4px;
-}
-
 /* Right Panel */
 .right-panel {
   flex: 0 0 clamp(280px, 20vw, 320px);
@@ -3763,7 +3170,7 @@ watch(
   }
 
   .chat-panel:not(.chat-panel-fullscreen):not(.chat-panel-collapsed) {
-    width: 420px;
+    width: var(--chat-panel-width, 420px);
   }
 
   .chat-messages {
@@ -3782,11 +3189,21 @@ watch(
   }
 
   .chat-panel:not(.chat-panel-fullscreen) {
-    max-width: 85%;
+    position: absolute; inset: 0 auto 0 0; width: min(420px, 85%); max-width: 85%;
   }
+  .chat-panel.chat-panel-collapsed { width: 0; }
+  .chat-panel-resizer { display: none; }
 
   .right-panel-overlay {
     max-width: 85%;
+  }
+
+  .right-panel-fab {
+    top: 8px;
+    bottom: auto;
+    right: 4px;
+    width: 40px;
+    height: 40px;
   }
 }
 </style>

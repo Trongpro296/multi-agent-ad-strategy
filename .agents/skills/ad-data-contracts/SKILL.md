@@ -31,3 +31,16 @@ media_plan cộng tiền theo các dòng phân bổ thực tế. Với budget_sc
 ## Bàn giao
 
 Sửa đúng file/cột được giao, cập nhật thuyết minh liên quan nếu node có quyền. Giữ nguyên brief, manifest và snapshot. Lưu rồi load lại từng file đã đổi; ghi lỗi gốc, cách sửa, file đổi và kiểm tra còn thiếu trong phần bàn giao hiện có. Không tự thêm file báo cáo hoặc cột mới khi workflow chưa cho phép; quyết định PLAN/QA vẫn do node có thẩm quyền phát.
+
+
+ĐỒNG BỘ THỬ NGHIỆM V2:
+Đọc experiment_plan.csv và measurement_plan.md hiện hành; giữ lịch, tiền, variant, concept, metric và điều kiện sẵn sàng nhất quán với Media/Creative/calendar. Chưa có hợp đồng từ nhánh Performance thì ghi dependency còn thiếu, không tạo một phép thử khác mâu thuẫn. Rework phải giữ đủ 20 cột experiment theo schema mới; không tự điền dữ liệu nền hoặc xác nhận tracking để vượt Gate.
+
+## Độ dài và tái sử dụng đầu vào
+Viết phần nghiệp vụ của vai trò, dẫn file/claim ID thay chép lại brief. Chat tóm tắt file, kết luận và giới hạn; giữ quyết định cuối nếu có. Đọc lại sau ghi, không lặp load khi nguồn chưa đổi. Mốc độ dài trong nhiệm vụ là tham khảo, không cắt schema hoặc bằng chứng để đủ số từ.
+
+## Truyền bảng CSV qua save_file
+Chỉ khi vai trò được giao xuất CSV: content của save_file có thể là chuỗi JSON gồm columns (tên cột theo schema) và rows (mảng object có đúng các key cột). Ưu tiên cách này để Python tự quote nội dung có dấu phẩy, dấu ngoặc kép hoặc xuống dòng và lưu UTF-8 BOM. Không bỏ dấu tiếng Việt để sửa số cột. Không dùng cấu trúc này cho qa_report.json hoặc publication JSON. Không tự thay dữ liệu thiếu bằng 0 hoặc cắt/ghép ô.
+
+## URL và ngày nguồn
+Nguồn external phải có URL tuyệt đối http/https và access_date thực tế YYYY-MM-DD, không trong tương lai. Dùng URL và dấu thời gian thực tế của lần truy cập; ngày chiến dịch hoặc TRUSTED_RUNTIME_DATE chỉ là thông tin thời gian, không chứng minh đã mở trang. Không tự thêm ngày, đổi loại nguồn hoặc xóa dòng để né kiểm tra. Nếu chỉ có tài liệu bàn giao, ghi đúng xuất xứ và phạm vi, không biến thành lần truy cập web mới. sources.csv được kiểm trước ghi và trước bàn giao; lỗi nguồn không gửi Assembler sửa thuyết minh lặp lại.

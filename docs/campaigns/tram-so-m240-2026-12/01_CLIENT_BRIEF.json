@@ -1,0 +1,104 @@
+{
+  "campaign_name": "TRẠM SỐ — M240: Gọn kết nối, nhẹ tiếng nhấp",
+  "brand_name": "Trạm Số",
+  "business_model": "Bán lẻ phụ kiện công nghệ online tại TP.HCM.",
+  "decision_authority": "Người dùng ủy quyền trợ lý tự chốt bộ thông số kinh doanh; các giá trị quyết định dưới đây dùng để lập kế hoạch, không phải lịch sử vận hành được quan sát.",
+  "product": "Chuột Logitech M240 Silent bản tiêu dùng; danh mục trọng tâm một mẫu, chưa quảng bá mã màu/SKU hãng cụ thể.",
+  "benefits": [
+    "Kết nối Bluetooth trên máy tương thích, không chiếm cổng USB.",
+    "Nhấp chuột yên tĩnh.",
+    "Dùng một pin AA."
+  ],
+  "price": {
+    "amount": 449000,
+    "currency": "VND",
+    "unit": "chiếc",
+    "public_price_authorized": true,
+    "basis": "Giá chủ dự án ủy quyền chọn, không phải giá của hãng."
+  },
+  "offer": {
+    "offer_id": "O1",
+    "description": "Một chuột M240 Silent, giá 449.000 VNĐ/chiếc; phí giao hàng báo riêng trước chốt đơn. Không giảm giá, không quà tặng, không combo."
+  },
+  "market": "Một chiến dịch bán online tới khách hàng TP.HCM, tư vấn và xác nhận tương thích qua Messenger.",
+  "region": "TP.HCM",
+  "language": "vi",
+  "goal": "G1: Hội thoại Messenger đủ điều kiện; đơn giao thành công và doanh thu thực thu được ghi riêng.",
+  "audience": {
+    "segment_id": "S1",
+    "decision": "Người đi làm 23–35 tuổi tại TP.HCM, dùng laptop có Bluetooth cho công việc văn phòng. Đây là lựa chọn nhắm mục tiêu, không phải khảo sát có sẵn."
+  },
+  "start_date": "2026-12-07",
+  "end_date": "2026-12-20",
+  "duration_days": 14,
+  "budget": {
+    "currency": "VND",
+    "total": 4200000,
+    "ad_spend": 2800000,
+    "production": 1400000,
+    "other": 0
+  },
+  "media_rules": [
+    "Một nền tảng Facebook, điểm đến Messenger. Facebook Feed là placement trọng tâm; không tự mở kênh mới.",
+    "Trần ad spend 200.000 VNĐ/ngày trong 14 ngày.",
+    "Tuần 1 và tuần 2 mỗi tuần 1.400.000 VNĐ. Hai hook A/B cùng S1/O1 chạy đồng thời mỗi tuần, mỗi biến thể 700.000 VNĐ/tuần.",
+    "Tổng ngân sách 4 dòng media = 2.800.000 VNĐ; A và B mỗi biến thể 1.400.000 VNĐ toàn kỳ. Chỉ thay hook, không thay giá, CTA hoặc phân khúc."
+  ],
+  "experiment": {
+    "id": "T1",
+    "type": "CREATIVE_EXPLORATION",
+    "start": "2026-12-07",
+    "end": "2026-12-20",
+    "duration_days": 14,
+    "variant_a": "Bluetooth cho góc làm việc gọn.",
+    "variant_b": "Nhấp chuột yên tĩnh ở không gian làm việc chung.",
+    "not_supported": "Không kết luận thắng về doanh thu hoặc ý nghĩa thống kê từ mẫu nhỏ."
+  },
+  "content": {
+    "posts": 6,
+    "video_scripts": 2,
+    "banners": 2,
+    "video_duration_seconds": [
+      30,
+      45
+    ],
+    "actual_video_generation": false,
+    "main_cta": "Nhắn mẫu laptop để được tư vấn tương thích."
+  },
+  "operations": {
+    "owner_role": "Chủ shop",
+    "inbox_hours": "09:00–21:00",
+    "first_response_target": "30 phút trong giờ trực; ngoài giờ phản hồi ca kế tiếp. Đây là SLA tổ chức được chọn.",
+    "order_flow": [
+      "Xác định laptop/hệ điều hành/Bluetooth và nhu cầu",
+      "Kiểm nguồn hàng thực có",
+      "Gửi ảnh thật, giá, phí giao và chính sách áp dụng",
+      "Khách xác nhận",
+      "Chỉ nhận tiền khi đã xác nhận hàng và điều kiện giao",
+      "Theo dõi giao thành công/hủy/hoàn và tiền thực thu"
+    ]
+  },
+  "actual_data": {
+    "past_ad_spend": null,
+    "past_orders": null,
+    "past_revenue": null,
+    "conversion_rate": null,
+    "cpl": null,
+    "cpa": null,
+    "roas": null,
+    "unit_cost": null,
+    "inventory": null,
+    "supplier_documents": null,
+    "real_product_photos": null,
+    "data_status": "NO_OBSERVED_HISTORY"
+  },
+  "readiness": {
+    "TRACKING": "PENDING",
+    "ASSETS": "PENDING",
+    "ACCOUNT_SETUP": "PENDING",
+    "OFFER_CLAIMS": "PENDING",
+    "OPERATIONS": "PENDING"
+  },
+  "publication_policy": "Một HUMAN: APPROVE duyệt kế hoạch và ủy quyền hoàn thiện bộ cuối; vẫn phải qua kiểm tra dữ liệu và QA tự động. Không tự đăng bài hoặc chi tiền.",
+  "unknown_handling": "Giữ dữ liệu chưa có trong hồ sơ nội bộ; không bịa 0, lịch sử, tồn kho, liên hệ, quyền ảnh hoặc cam kết bảo hành. Nội dung công khai dùng thông số đã xác minh và quyết định giá đã cho phép."
+}
