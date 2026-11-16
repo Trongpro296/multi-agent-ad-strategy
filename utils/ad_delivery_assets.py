@@ -133,6 +133,12 @@ def build_delivery_assets(folder, qa, plan_version):
     prs = Presentation()
     prs.slide_width, prs.slide_height = Inches(13.333), Inches(7.5)
     font_name = 'Arial'
+    presentation_main = True
+    from pptx.chart.data import CategoryChartData
+    from pptx.enum.chart import XL_CHART_TYPE, XL_LABEL_POSITION
+    from PIL import Image
+    import hashlib
+    import os
 
     def wrap(value, inches, points):
         candidates = ['C:/Windows/Fonts/arial.ttf', '/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf',
@@ -185,7 +191,10 @@ def build_delivery_assets(folder, qa, plan_version):
         s = prs.slides.add_slide(prs.slide_layouts[6])
         s.background.fill.solid()
         s.background.fill.fore_color.rgb = RGBColor(255, 255, 255)
-        textbox(s, .65, .35, 12, 1.1, title, 24, navy, True)
+        title_lines = wrap(title, 12, 30)
+        textbox(s, .65, .35, 12, 1.1, '\n'.join(title_lines) if len(title_lines) <= 2 else 'Chi tiết kế hoạch', 30, navy, True)
+        if len(title_lines) > 2:
+            s.notes_slide.notes_text_frame.text = title
         textbox(s, .65, 7.06, 12, .25, 'Phiên bản ' + str(plan_version) + '  •  ' + qa['implementation_readiness']['status'] + '  •  ' + str(len(prs.slides)), 10, teal)
         return s
 
@@ -214,8 +223,10 @@ def build_delivery_assets(folder, qa, plan_version):
         groups = [list(range(count))] if count <= 6 else [[0] + list(range(start, min(start + 5, count))) for start in range(1, count, 5)]
         for indexes in groups:
             width = 11.8 / len(indexes)
-            header_lines = [wrap(plain(header[i]), width - .16, 13) for i in indexes]
-            header_height = max(.5, max(map(len, header_lines)) * .24 + .16)
+            size = 17 if presentation_main else 13
+            line_height = size * 1.25 / 72 + .02
+            header_lines = [wrap(plain(header[i]), width - .16, size) for i in indexes]
+            header_height = max(.5, max(map(len, header_lines)) * line_height + .16)
             if header_height > 1.5:
                 # Unusually verbose headers remain readable in a dedicated text page.
                 text_pages(title + ' — tên cột', [plain(header[i]) for i in indexes])
@@ -225,10 +236,10 @@ def build_delivery_assets(folder, qa, plan_version):
                 displayed = ['\n'.join(lines) for lines in header_lines]
             chunks = []
             for row in body:
-                cells = [wrap(plain(row[i] if i < len(row) else ''), width - .16, 13) for i in indexes]
+                cells = [wrap(plain(row[i] if i < len(row) else ''), width - .16, size) for i in indexes]
                 for offset in range(0, max(map(len, cells)), 10):
                     values = ['\n'.join(cell[offset:offset + 10]) for cell in cells]
-                    height = max(.44, max(len(cell[offset:offset + 10]) for cell in cells) * .24 + .16)
+                    height = max(.44, max(len(cell[offset:offset + 10]) for cell in cells) * line_height + .16)
                     chunks.append((values, height))
             while chunks:
                 selected, height = [], header_height
@@ -236,6 +247,7 @@ def build_delivery_assets(folder, qa, plan_version):
                     values, row_height = chunks.pop(0)
                     selected.append((values, row_height)); height += row_height
                 s = slide(title)
+                notes(s, 'media_plan.csv; execution_calendar.csv; qa_report.json' if presentation_main else 'advertising_strategy.md', '\n'.join(' | '.join(row) for row in rows))
                 table = s.shapes.add_table(len(selected) + 1, len(indexes), Inches(.75), Inches(1.55), Inches(11.8), Inches(height)).table
                 table.rows[0].height = Inches(header_height)
                 for rindex, (values, row_height) in enumerate([(displayed, header_height)] + selected):
@@ -247,24 +259,231 @@ def build_delivery_assets(folder, qa, plan_version):
                         cell.margin_top = cell.margin_bottom = Inches(.04)
                         cell.fill.solid(); cell.fill.fore_color.rgb = RGBColor.from_string(navy if rindex == 0 else ('F0F5F8' if rindex % 2 else 'FFFFFF'))
                         for paragraph in cell.text_frame.paragraphs:
-                            paragraph.font.name, paragraph.font.size = font_name, Pt(13)
+                            paragraph.font.name, paragraph.font.size = font_name, Pt(size)
                             paragraph.font.bold = rindex == 0
                             paragraph.font.color.rgb = RGBColor.from_string('FFFFFF' if rindex == 0 else navy)
-                            paragraph.line_spacing = Pt(16)
+                            paragraph.line_spacing = Pt(size * 1.25)
 
-    md = (root / 'advertising_strategy.md').read_text(encoding='utf-8-sig')
+    def notes(page, source, detail=''):
+        page.notes_slide.notes_text_frame.text = 'Nguồn: ' + source + '\n' + detail
+
+    def read_text(name):
+        path = root / name
+        return path.read_text(encoding='utf-8-sig') if path.exists() else ''
+
+    def read_rows(name):
+        path = root / name
+        if not path.exists():
+            return []
+        with path.open(encoding='utf-8-sig', newline='') as stream:
+            return list(csv.DictReader(stream))
+
+    def display(value):
+        if value is None or value == '':
+            return 'Chưa có thông tin'
+        if isinstance(value, dict):
+            labels = {'name': 'Nhóm khách hàng', 'description': 'Đặc điểm', 'segment_id': 'Mã phân khúc', 'segments': 'Phân khúc'}
+            return '\n'.join(labels.get(str(k), str(k)) + ': ' + display(v) for k, v in value.items())
+        if isinstance(value, list):
+            return '; '.join(display(v) for v in value)
+        return plain(str(value))
+
+    def excerpt(value, limit=7, width=11.8, size=20):
+        # Select complete sentences, never slice a claim or remove its qualifier.
+        paragraphs = re.split(r'\n+|(?<=[.!?;])\s+', display(value))
+        selected, used = [], 0
+        for paragraph in paragraphs:
+            paragraph = plain(re.sub(r'^\s*(?:[-*+]\s+|#{1,6}\s+)', '', paragraph))
+            if not paragraph or paragraph.startswith('|'):
+                continue
+            height = len(wrap(paragraph, width, size))
+            if used + height > limit:
+                if selected:
+                    break
+                continue
+            selected.append(paragraph)
+            used += height + 1
+            if len(selected) == 3:
+                break
+        return '\n\n'.join(selected) if selected else 'Xem nội dung đầy đủ trong phụ lục và hồ sơ nguồn.'
+
+    def narrative(title, value, source):
+        page = slide(title)
+        textbox(page, .75, 1.65, 11.8, 4.7, excerpt(value), 20)
+        notes(page, source, display(value))
+        return page
+
+    def file_section(name, keywords=()):
+        text = read_text(name)
+        sections = re.split(r'(?m)^#{1,3}\s+', text)
+        for section in sections:
+            heading = section.split('\n', 1)[0].casefold()
+            if any(key.casefold() in heading for key in keywords):
+                return section
+        return text
+
+    # Optional creative assets must belong to the sealed publication for this plan.
+    publication, banner_assets = None, []
+    workspace = root.resolve().parent
+    if os.environ.get('AD_PUBLICATION_REQUIRED') == '1':
+        from utils.ad_publication import read, safe, sha, verify_review
+        seal = os.environ.get('AD_PUBLICATION_APPROVAL_SHA256')
+        approval_path = workspace / 'internal/publication_approval.json'
+        if not seal or sha(approval_path) != seal:
+            raise ValueError('PPTX requires the trusted publication approval seal')
+        approval = read(approval_path)
+        review = read(workspace / 'internal/publication_review.json')
+        verify_review(workspace, review)
+        if (review['plan_version'] != plan_version or approval.get('status') != 'APPROVED'
+                or approval.get('release_id') != review['release_id']
+                or approval.get('review_sha256') != sha(workspace / 'internal/publication_review.json')):
+            raise ValueError('PPTX publication version/approval mismatch')
+        publication = read(workspace / 'artifacts/publication_content.json')
+        banner_assets = review.get('banner_assets', [])
+        if publication['plan_version'] != plan_version:
+            raise ValueError('PPTX public copy version mismatch')
+
+    md = read_text('advertising_strategy.md')
     lines = md.splitlines()
     title = plain(next((line.lstrip('# ').strip() for line in lines if line.strip()), 'Kế hoạch quảng cáo'))
-    cover = slide('Chiến lược quảng cáo')
-    title_lines = wrap(title, 11.7, 28)
-    if len(title_lines) <= 5:
-        textbox(cover, .8, 2.1, 11.7, 2.7, '\n'.join(title_lines), 28, navy, True)
+    brand = display((publication or {}).get('brand_name') or brief.get('brand_name') or brief.get('brand') or 'Kế hoạch chiến dịch')
+    cover = slide('Kế hoạch chiến dịch')
+    cover.background.fill.fore_color.rgb = RGBColor.from_string(navy)
+    for shape in cover.shapes:
+        if shape.has_text_frame:
+            for paragraph in shape.text_frame.paragraphs:
+                paragraph.font.color.rgb = RGBColor.from_string('FFFFFF')
+    textbox(cover, .8, 1.9, 11.7, 1.0, excerpt(brand, 2, 11.7, 38), 38, 'FFFFFF', True)
+    textbox(cover, .8, 3.3, 11.7, 1.9, excerpt(title, 4, 11.7, 24), 24, 'FFFFFF')
+    period = str(brief.get('start_date', '')) + ' — ' + str(brief.get('end_date', ''))
+    textbox(cover, .8, 5.65, 11.7, .7, period, 20, 'A6DDD7')
+    notes(cover, 'campaign_brief.json; advertising_strategy.md', title)
+
+    narrative('Quyết định chính', qa['review_summary'], 'qa_report.json / review_summary')
+    narrative('Mục tiêu và phạm vi',
+              'Mục tiêu: ' + display(brief.get('goal', brief.get('objective'))) + '\n'
+              + 'Sản phẩm: ' + display(brief.get('product')) + '\n'
+              + 'Thị trường: ' + display(brief.get('market', brief.get('region'))), 'campaign_brief.json')
+    audience_path = root / 'audience_segments.json'
+    audience = json.loads(audience_path.read_text(encoding='utf-8-sig')) if audience_path.exists() else brief.get('audience')
+    narrative('Khách hàng ưu tiên', audience, 'audience_segments.json; campaign_brief.json')
+    narrative('Bối cảnh và bằng chứng', file_section('advertising_strategy.md', ('thị trường', 'đối thủ')), 'advertising_strategy.md; evidence_digest.md; sources.csv')
+    narrative('Định vị và thông điệp', file_section('advertising_strategy.md', ('định vị',)), 'advertising_strategy.md; brand_positioning.md')
+    narrative('Chiến lược và hành trình chuyển đổi',
+              file_section('advertising_strategy.md', ('chiến lược', 'hành trình', 'funnel')),
+              'advertising_strategy.md; campaign_strategy.md; customer_journey.md')
+
+    budget = brief.get('budget', {})
+    currency = str(budget.get('currency') or '')
+    labels = {'ad_spend': 'Quảng cáo', 'production': 'Sản xuất', 'other': 'Khoản khác'}
+    known = [(label, budget[key]) for key, label in labels.items()
+             if type(budget.get(key)) in (int, float) and math.isfinite(budget[key]) and budget[key] >= 0]
+    budget_page = slide('Phân bổ ngân sách' + (' (' + currency + ')' if currency else ''))
+    if known and any(amount > 0 for _, amount in known):
+        data = CategoryChartData()
+        data.categories = [label for label, _ in known]
+        data.add_series('Ngân sách', [amount for _, amount in known])
+        chart = budget_page.shapes.add_chart(XL_CHART_TYPE.BAR_CLUSTERED, Inches(.8), Inches(1.6),
+                                             Inches(11.5), Inches(3.9), data).chart
+        chart.has_legend = False
+        chart.category_axis.tick_labels.font.size = Pt(18)
+        chart.value_axis.tick_labels.font.size = Pt(14)
+        chart.value_axis.tick_labels.number_format = '#,##0'
+        plot = chart.plots[0]
+        plot.has_data_labels = True
+        plot.data_labels.position = XL_LABEL_POSITION.OUTSIDE_END
+        plot.data_labels.font.size = Pt(16)
+        plot.data_labels.number_format = '#,##0'
+        series = chart.series[0]
+        series.format.fill.solid()
+        series.format.fill.fore_color.rgb = RGBColor.from_string(teal)
+        missing = [label for key, label in labels.items() if key not in budget or budget[key] is None]
+        caption = 'Chỉ thể hiện các khoản có số liệu trong brief. Không phải kết quả chi tiêu thực tế.'
+        if missing:
+            caption += '\nChưa có số liệu: ' + ', '.join(missing) + '.'
+        textbox(budget_page, .8, 5.85, 11.7, .9, caption, 17)
     else:
-        textbox(cover, .8, 2.1, 11.7, 1, 'Bộ kế hoạch và điều kiện triển khai', 28, navy, True)
-        text_pages('Tên kế hoạch', [title])
-    textbox(cover, .8, 5.5, 11.7, .8, 'QA: ' + qa['verdict'] + '\nChỉ trình bày kế hoạch; chưa xác nhận chiến dịch đã chạy.', 18, teal)
-    text_pages('Kết luận và điều kiện trước launch', [qa['review_summary'], qa['implementation_readiness']['reason']] +
-               [item['condition_id'] + ' — ' + item['status'] + ': ' + item['description'] + ' | ' + item['owner'] + ' | ' + item['verification'] for item in qa['prelaunch_conditions']])
+        textbox(budget_page, .8, 1.7, 11.7, 2, 'Chưa đủ số liệu ngân sách để vẽ biểu đồ. Xem brief và bảng Media.', 22)
+    notes(budget_page, 'campaign_brief.json / budget', json.dumps(budget, ensure_ascii=False))
+
+    media = read_rows('media_plan.csv')
+    channel_groups = {}
+    for row in media:
+        channel_groups.setdefault((row.get('channel', ''), row.get('currency', '')), []).append(row)
+    channel_rows = []
+    for (channel, unit), items in channel_groups.items():
+        amounts = []
+        for item in items:
+            try:
+                amount = float(item['budget_amount'])
+                if not math.isfinite(amount) or amount < 0:
+                    raise ValueError('Invalid media budget for PPTX')
+                amounts.append(amount)
+            except (KeyError, ValueError):
+                amounts = []
+                break
+        total = format(sum(amounts), ',.2f').rstrip('0').rstrip('.') + ' ' + unit if amounts else 'Chưa đủ số liệu'
+        objectives = list(dict.fromkeys(r.get('objective', '') for r in items if r.get('objective')))
+        dates = [r.get('start', '') for r in items] + [r.get('end', '') for r in items]
+        channel_rows.append([channel, '\n'.join(objectives), total, min(dates) + ' → ' + max(dates)])
+    table_pages('Kế hoạch kênh', [['Kênh', 'Mục tiêu', 'Ngân sách', 'Thời gian']] + channel_rows)
+    narrative('Ý tưởng sáng tạo', file_section('advertising_strategy.md', ('sáng tạo', 'creative')), 'advertising_strategy.md; creative_brief.md; creative_matrix.csv')
+    if publication:
+        for asset in banner_assets:
+            rel = 'artifacts/' + asset['path']
+            path = safe(workspace, rel)
+            if hashlib.sha256(path.read_bytes()).hexdigest() != review['files'].get(rel):
+                raise ValueError('PPTX banner hash mismatch')
+            item = next((b for b in publication['banners'] if b['id'] == asset['id']), None)
+            if item is None:
+                raise ValueError('PPTX banner has no approved public brief')
+            page = slide('Banner ' + asset['id'])
+            with Image.open(path) as image:
+                width, height = image.size
+            scale = min(5.0 / width, 5.0 / height)
+            page.shapes.add_picture(str(path), Inches(.8 + (5.0 - width * scale) / 2),
+                                   Inches(1.55 + (5.0 - height * scale) / 2),
+                                   width=Inches(width * scale), height=Inches(height * scale))
+            copy = item['headline'] + '\n\n' + item['cta']
+            textbox(page, 6.25, 1.8, 6.1, 4.3, excerpt(copy, 9, 6.1, 22), 22)
+            notes(page, 'publication_content.json / ' + item['id'],
+                  copy + '\nMinh họa AI; nguồn và hash trong publication_manifest.json. Không xác nhận đã được người dùng duyệt thị giác riêng.')
+        for post in publication['posts'][:2]:
+            narrative('Bài đăng ' + post['id'], post['content'] + '\n' + post['cta'],
+                      'publication_content.json / posts / ' + post['id'])
+        for video in publication['video_scripts'][:2]:
+            narrative('Kịch bản: ' + video['id'], video['title'] + '\n' + '\n'.join(
+                str(scene['start']) + '–' + str(scene['end']) + 's: ' + scene['visual']
+                for scene in video['scenes']), 'publication_content.json / video_scripts / ' + video['id'])
+
+    calendar = read_rows('execution_calendar.csv')
+    weeks = {}
+    for row in calendar:
+        weeks.setdefault(row.get('week') or row.get('start', ''), []).append(row)
+    week_rows = []
+    for week, items in weeks.items():
+        starts = [r.get('start', '') for r in items if r.get('start')]
+        ends = [r.get('end', '') for r in items if r.get('end')]
+        period = (min(starts) if starts else '') + ' → ' + (max(ends) if ends else '')
+        channels = ', '.join(dict.fromkeys(r.get('channel', '') for r in items))
+        owners = ', '.join(dict.fromkeys(r.get('owner', '') for r in items))
+        week_rows.append([period, channels, str(len(items)) + ' hoạt động', owners])
+    table_pages('Lịch triển khai theo giai đoạn', [['Thời gian', 'Kênh', 'Khối lượng', 'Phụ trách']] + week_rows)
+    narrative('Đo lường và quy tắc quyết định',
+              file_section('advertising_strategy.md', ('đo lường', 'thử nghiệm', 'KPI')),
+              'advertising_strategy.md; measurement_plan.md; experiment_plan.csv')
+    narrative('Điều kiện triển khai', qa['implementation_readiness']['reason'],
+              'qa_report.json / implementation_readiness')
+    table_pages('Việc cần hoàn tất trước triển khai', [['Điều kiện', 'Trạng thái', 'Người phụ trách']] +
+                [[c['condition_id'], c['status'], c['owner']] for c in qa['prelaunch_conditions']])
+
+    divider = slide('Phụ lục · Kế hoạch đầy đủ')
+    textbox(divider, .8, 2.2, 11.7, 2.5,
+            'Nội dung chi tiết, bảng và các giới hạn của kế hoạch được giữ nguyên ở các trang tiếp theo.\n\n'
+            'Bảng số liệu đầy đủ nằm trong Campaign_Plan.xlsx; nguồn và trạng thái triển khai nằm trong hồ sơ nội bộ.', 24)
+    notes(divider, 'advertising_strategy.md; Campaign_Plan.xlsx')
+
+    presentation_main = False
     section, paragraphs, index = 'Tổng quan', [], 1
     def flush():
         if paragraphs:
